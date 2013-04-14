@@ -1,0 +1,615 @@
+  
+Overview:
+
+A typical autobalancing bridge requires sampling both the voltage signal (that energizes the dut, Zx) and an out-of-phase voltage drop on the measurement resistor, Rm, that is proportional to the current going through Zx.
+
+The measurement system should be able to detect both amplitude of the two signals, as well as their relative phase shifts.
+
+The typical solution is primarily hardware driven and fairly complicated.
+
+
+Concept:
+
+The original concept comes from a Circuit Cellar design where the authors tried to measure the voltage / curreng signals and then detect the zero crossing and interpolating the phase shifts. The amplitude detection is based on the maximum signal sampled.
+
+Given that the frequency of the energizing signal is known (as it is produced by the mcu), we could easily sample the voltage / current signals and then fit them to a sine / cosine curve to find out both their amplitude and their relative phase shifts.
+
+
+Curve fitting:
+
+There are many ways to fit a sine/cosine series of sampled data to a sine/cosine equation. I mentioned FFT (most accurate but most computationally intense), or detection of zero crossing (simple but not very accurate, and prone to measurement errors).
+
+Here, I am going to try ieee-std-1057.
+
+
+IEEE-std-1057 ("ieee1057") is a standardized procedure for digital recorders to decompose a sine signal into amplitude, frequency, phase shifts, and offset.
+
+(1) y(t) = A * cosine(2 * pi * f * t) + B * sine(2 * pi * f * t) + C + error(t);
+
+where y(t) is the sampled data, f is the frequency, A/B/C are the amplitude and error() is the measurement error with 0 mean.
+
+Alternatively, equation (1) can be rewritten as:
+
+(2) y(t) = A0 * cosine(2 * pi * f * t + theta) + C + error(t);
+
+where A0 is the amplitude and theta is the phase shift.
+
+In our case, f (frequency of the energyzing signal is known) so we simply need to solve for A, B, C based on y(t), cosine(2 * pi * f * t) and sine(2 * pi * f * t): those are linear equations with 3 unknowns.
+
+The ieee1057 algorithm is laid out in the following document:
+
+digitize waveform recorders-2.pdf  
+
+The one we care about is section 4.1.3.2 (p19).
+
+
+Here is the code for ieee1057:
+
+
+//ieee-std-1057, non-matrix 3 parameter sine curve fitting
+//ieee-std-1057 1994, P19
+void ieee1057_3(unsigned short length,          //sample data length
+                unsigned short * buffer,        //input sample data buffer
+                FITTED_COSINE_T * output        //vector data output
+               ) {
+    unsigned short n;                                            //index
+    double alphan, betan;                                        //sine / cosine terms
+    double sum_yn=0, sum_alphan=0, sum_betan=0;        //define the sums, on P19
+    double sum_alphanxbetan=0, sum_alphan2=0, sum_betan2=0;        //define the sums, on P19
+    double sum_ynxalphan=0, sum_ynxbetan=0, sum_yn2=0;        //define the sums, on P19
+    double Xn, Xd;                                            //temp variables used in calculation
+
+    //calculate signal sums
+    for (n=0; n<length; n++) {
+        //calculate alpha / beta
+        alphan=cos(_2PI * f_osc * n / N);
+        betan=sin(_2PI * f_osc * n / N);
+
+        //caulate the sums
+        sum_yn += buffer[n];
+        sum_alphan += alphan;
+        sum_betan += betan;
+        sum_alphanxbetan += alphan * betan;
+        sum_alphan2 += alphan * alphan;
+        sum_betan2 += betan * betan;
+        sum_ynxalphan += buffer[n] * alphan;
+        sum_ynxbetan += buffer[n] * betan;
+        sum_yn2 += ((double)buffer[n]) * buffer[n];        //to avoid overflow
+    }
+
+    //calculate An/Ad
+    Xn =         (sum_ynxalphan - sum_alphan * sum_yn / M) / (sum_alphanxbetan - sum_alphan * sum_betan / M) -
+            (sum_ynxbetan - sum_betan * sum_yn / M) / (sum_betan2 - sum_betan * sum_betan / M);
+    Xd =        (sum_alphan2 - sum_alphan * sum_alphan / M) / (sum_alphanxbetan - sum_alphan * sum_betan / M) -
+            (sum_alphanxbetan - sum_betan * sum_alphan / M) / (sum_betan2 - sum_betan * sum_betan / M);
+    output->A = Xn / Xd;
+    Xn =        (sum_ynxalphan - sum_alphan * sum_yn / M) / (sum_alphan2 - sum_alphan * sum_alphan / M) -
+            (sum_ynxbetan - sum_betan * sum_yn / M) / (sum_alphanxbetan - sum_betan * sum_alphan / M);
+    Xd =        (sum_alphanxbetan - sum_alphan * sum_betan / M) / (sum_alphan2 - sum_alphan * sum_alphan / M) -
+            (sum_betan2 - sum_betan * sum_betan / M) / (sum_alphanxbetan - sum_betan * sum_alphan / M);
+    output->B = Xn / Xd;
+    output->C = sum_yn / M - output->A * sum_alphan / M - output->B * sum_betan / M;
+
+    //alternative output
+    output->A0 = sqrt(output->A * output->A + output->B * output->B);
+    output->theta = atan(-output->B / output->A);
+    //output->theta += (output->A < 0)? PI: 0;
+}
+
+
+The code is a carbon-copy of the IEEE paper, down to the notation used.
+
+It takes three parameters:
+
+1) unsigned short length: this sets the number of data samples supplied to the ieee1057 routine.
+2) unsigned short *buffer: this is the actually data from our adc routine, for either the voltage or current signal.
+3) FITTED_COSINE_T * output: this is the output of the ieee1057 curve fitting.
+
+FITTED_COSINE_T is defined as such:
+
+typedef struct {
+    double A, B, C;                  //fitted cosine wave: yn = A * cosine(wt) + B * sine(wt) + C
+    double A0, theta;                //fitted cosine wave: yn = A0 * cosine(wt + theta) + C
+} FITTED_COSINE_T;
+
+It contains two sets of quantification:
+
+1) A/B/C, corresponding to equation (1) above;
+2) A0/theta, corresponding to equation (2) above.
+
+
+Work flow:
+
+Essentially, we will perform adc on the voltage / current signal, fit them to the ieee1057 routine. From that, we obtain both the amplitude and phase information about the voltage / current through our dut, which allows us to calculate its impedance (decomposed to Zr/Zi, or Z/theta).
+
+Since we don't have the hardware implemented, we will have to simulate the sample data, aka generate it ourselves.
+
+Data generation:
+
+To test our ieee1057 routine, we want to generate a known sine/cosine data series and see if it can be decomposed back to A/B/C, or A0/theta that conforms to the parameters we used to generate that sine/cosine data series.
+
+That's fairly simple:
+
+
+//generate adc data
+void data_gen(  unsigned short length,                 //length of data
+                unsigned short *buffer,                //output data buffer
+                double A,                              //gain for the sine term
+                double B,                              //gain for the cosine term
+                double C,                              //constant
+                double error_gain                      //gain for the error term
+             ) {
+    unsigned short n;                                  //loop index
+
+    //srand(1235);                                     //seed the random number generator
+    for (n=0; n<length; n++) buffer[n]=        A * cos(_2PI * f_osc * n / N) +                //sine term
+                                               B * sin(_2PI * f_osc * n / N) +                //cosine term
+                                        C +                                                   //constant
+                                        error_gain * (rand() / 32768.0 - 0.5);        //error term, mean = 0.0
+    //return;
+}
+
+data_gen() takes a series of parameters, and produce a data array (in *buffer) of a length specified by the user. The user also specify A/B/C and error_gain: error_gain controls how much noise you want to introduce to the system. High noise means less accurate measurements. I typically use 1% of sqrt (A^2 + B^2), to simulate the general inaccuracy of a typical 10-bit adc module in a mcu.
+
+First test:
+
+Here is how we will pull it together:
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+#define PI                                  3.14159265359        //pi
+#define _2PI                                (2*PI)               //2 * pi
+
+typedef struct {
+    double A, B, C;                  //fitted cosine wave: yn = A * cosine(wt) + B * sine(wt) + C
+    double A0, theta;                //fitted cosine wave: yn = A0 * cosine(wt + theta) + C
+} FITTED_COSINE_T;
+
+#define M                200                       //number of data samples, unsigned short
+#define N                (M * f_osc / 10)          //sample per period
+unsigned short voltn[M], curtn[M];                 //data samples
+FITTED_COSINE_T volt, curt;                        //voltage / current vectors
+double f_osc=10000.0;                              //sample frequency, in hz
+
+//generate adc data
+void data_gen(  unsigned short length,             //length of data
+                unsigned short *buffer,            //output data buffer
+                double A,                          //gain for the sine term
+                double B,                          //gain for the cosine term
+                double C,                          //constant
+                double error_gain                  //gain for the error term
+             ) {
+    unsigned short n;                              //loop index
+
+    //srand(1235);                                 //seed the random number generator
+    for (n=0; n<length; n++) buffer[n]= A * cos(_2PI * f_osc * n / N) +               //sine term
+                                        B * sin(_2PI * f_osc * n / N) +               //cosine term
+                                        C +                                           //constant
+                                        error_gain * (rand() / 32768.0 - 0.5);        //error term, mean = 0.0
+    //return;
+}
+
+//print buffer
+void data_prt(unsigned short length, unsigned short * buffer) {
+    unsigned short i;                                  //loop index
+    printf("simulated data\n");                        //simulated data to be printed
+    //for (i=0; i<length; i++) printf("buffer[%4d]=%5d\n", i, buffer[i]);
+    for (i=0; i<length; i++) printf("%5d\n", buffer[i]);
+
+}
+
+//ieee-std-1057, non-matrix 3 parameter sine curve fitting
+//ieee-std-1057 1994, P19
+void ieee1057_3(unsigned short length,          //sample data length
+                unsigned short * buffer,        //input sample data buffer
+                FITTED_COSINE_T * output        //vector data output
+               ) {
+    unsigned short n;                           //index
+    double alphan, betan;                       //sine / cosine terms
+    double sum_yn=0, sum_alphan=0, sum_betan=0;        //define the sums, on P19
+    double sum_alphanxbetan=0, sum_alphan2=0, sum_betan2=0; //define the sums, on P19
+    double sum_ynxalphan=0, sum_ynxbetan=0, sum_yn2=0;      //define the sums, on P19
+    double Xn, Xd;                                          //temp variables used in calculation
+
+    //calculate signal sums
+    for (n=0; n<length; n++) {
+        //calculate alpha / beta
+        alphan=cos(_2PI * f_osc * n / N);
+        betan=sin(_2PI * f_osc * n / N);
+
+        //caulate the sums
+        sum_yn += buffer[n];
+        sum_alphan += alphan;
+        sum_betan += betan;
+        sum_alphanxbetan += alphan * betan;
+        sum_alphan2 += alphan * alphan;
+        sum_betan2 += betan * betan;
+        sum_ynxalphan += buffer[n] * alphan;
+        sum_ynxbetan += buffer[n] * betan;
+        sum_yn2 += ((double)buffer[n]) * buffer[n];        //to avoid overflow
+    }
+
+    //calculate An/Ad
+    Xn =         (sum_ynxalphan - sum_alphan * sum_yn / M) / (sum_alphanxbetan - sum_alphan * sum_betan / M) -
+            (sum_ynxbetan - sum_betan * sum_yn / M) / (sum_betan2 - sum_betan * sum_betan / M);
+    Xd =        (sum_alphan2 - sum_alphan * sum_alphan / M) / (sum_alphanxbetan - sum_alphan * sum_betan / M) -
+            (sum_alphanxbetan - sum_betan * sum_alphan / M) / (sum_betan2 - sum_betan * sum_betan / M);
+    output->A = Xn / Xd;
+    Xn =        (sum_ynxalphan - sum_alphan * sum_yn / M) / (sum_alphan2 - sum_alphan * sum_alphan / M) -
+            (sum_ynxbetan - sum_betan * sum_yn / M) / (sum_alphanxbetan - sum_betan * sum_alphan / M);
+    Xd =        (sum_alphanxbetan - sum_alphan * sum_betan / M) / (sum_alphan2 - sum_alphan * sum_alphan / M) -
+            (sum_betan2 - sum_betan * sum_betan / M) / (sum_alphanxbetan - sum_betan * sum_alphan / M);
+    output->B = Xn / Xd;
+    output->C = sum_yn / M - output->A * sum_alphan / M - output->B * sum_betan / M;
+
+    //alternative output
+    output->A0 = sqrt(output->A * output->A + output->B * output->B);
+    output->theta = atan(-output->B / output->A);
+    //output->theta += (output->A < 0)? PI: 0;
+}
+
+int main(void) {
+    //generate simulated data
+    data_gen(M, voltn, 500, 100, 1000, 10);        //voltage signal
+    //data_prt(M, voltn);                          //print out data
+    //data_gen(M, curtn, 100, 200, 2000, 10);      //current signal
+    //data_prt(M, currentn);
+
+    //simulated data generation
+    //data_gen1(M, voltn, curtn);                  //load specification in data_gen1()
+
+    //calculate the voltage signal
+    ieee1057_3(M, voltn, &volt);
+    printf("volt.A = %10.2f, volt.B = %10.2f, volt.C = %10.2f\n", volt.A, volt.B, volt.C);
+    printf("volt.A0 = %10.2f, volt.theta = %10.2f\n", volt.A0, volt.theta);
+
+    return 0;
+}
+
+The voltn[] series is geneated with A = 500, B = 100, C = 1000, we should expect our ieee1057 to return parameters in that neighborhood.
+
+Here is the output:
+
+
+volt.A = 499.99, volt.B = 100.23, volt.C = 999.64
+volt.A0 = 509.93, volt.theta = -0.20
+
+So A is 499.99 vs. 500.00, B is 100.23 vs. 100.00, C is 999.64 vs. 1000.00, pretty accurate.
+
+The A0 / theta parameters are similarly accurate - you can do the math.
+
+note: for some reason, theta is out of phase. That doesn't matter for now, as we will reverse it later.
+
+So our ieee1057() routine is accurate, reasonably so.
+
+You can play with the various parameters to get a sense of how the parameters impact each other. A word of caution: as we use unsigned short for the sampled data (they come from a 10-bit adc), you need to make sure that the C parameter is sufficiently large to avoid going negative (a negative number translates into a large positive number, due to 2's compliments).
+
+Two observations:
+1) because of the least-mean-square approach, the ieee1057 routine is incredibly resistant to noises, particularly when sample size is large (> 400 points or so). I think on larger mcus, you can probably set M to 2000 (-> 4KB for each signal and 8KB total). This allows you to easily get to <0.1% accuracy.
+2) you will also find that you can feed the routine with data sampled across a partial cycle and the routine will still be able to decompose to the right parameters. However, undersampling is more preferred than oversampling.
+
+The ieee1057 routine presented here is pretty crude, given its being public domain. It operates in batch mode and is very space hungary. There are iterative / adaptive ieee1057 algorithms out there but they are typically proprietary. If you have a sufficiently fast mcu / processor (fpga for example), you can lay a Kalman filter on top of this and produce some pretty fancy impedance meters.
+
+
+Impedance calculation:
+
+The ieee1057 is the hard part.
+
+Once we have obtained the amplitude / phase information about the voltage / current signal through the dut, we can calculate its impedance easily: pure math:
+
+
+/calculate impedance (Zdut)
+//measurement approach: autobalancing bridge
+//connection:
+//
+//            - volt (sampling point)                - curt (sampling point)
+//            |                                      |
+//            |                                      |
+//            |    ------               ------       |
+// Vosc---------- | Zdut |-------------|  Rm  |-------
+// (freq=f_osc)    ------      |        ------       |
+//                             |                     |
+//                             |       |------|      |
+//                             |-------|-     |      |
+//                                     |Amp  O|------|
+//                             |-------|+     |
+//                             |       |------|
+//                           Vbias
+//                             |
+//                             |
+//                            --- (GND)
+//                             -
+//
+void impedance(FITTED_COSINE_T * voltage, FITTED_COSINE_T * current, IMPEDANCE_T * dut) {
+    //double tmp;                                                                //temperary variable
+
+    //calculate current through Rm
+    //tmp = current.A0 / Rm;
+    dut->Z = voltage->A0 * Rm / current->A0;                // tmp;
+    dut->theta = /*-*/(current->theta - voltage->theta);        //eliminate '-' as the current signal is out of phase.
+    dut->Zi= dut->Z * sin(dut->theta);
+    dut->Zr= dut->Z * cos(dut->theta);
+
+    //calculate L or C
+    if (dut->theta > 0) {                                        //capacitive load
+        dut->LC = 1.0 / (dut->Zi * _2PI * f_osc);        //calculate C, in f
+    } else {
+        dut->LC = -dut->Zi / (_2PI * f_osc);        //calculate L, in H
+    }
+}
+
+That's the basic math that any EE will know how to do, with his/her eyes blindfolded.
+
+IMPEDANCE_T is defined as such:
+
+
+typedef struct {
+    double Z;                                //parallel / serial impedance
+    double Zr, Zi;                        //parallel/serial impmedance, real and imaginary
+    //double Sr, Si;                //serial impedance, real and imaginary
+    double theta;                        //angles
+    double Q;                                //Q factor
+    double LC;                                //dut's resistance, L(uh) or C(ph)
+} IMPEDANCE_T;
+
+Z is the impedance, Zr/Zi being its real / imaginary part, respectively.
+
+We also allow the potential to calculate Q (=tan(90 degree - theta)), and we allow decomposing that to an inductance or a capacitance figure, LC (in uh/pf), based on the sign of Zi, or if we are calculating parallel / serial parameters.
+
+Tese_mee_56027.pdf
+
+Our approaches are almost identical: his is a 7-parameter estimation (which is actually FFT + 2 ieee1057 3-parameter estimates).
+
+I also looked through other references listed in that article. there seems to be an explosion of research in this year, over the last 5 years or so.
+
+A paper by Pedro Ramos compared the 7-parameter, sinc fit, and ellipse fit and found the 7-parameter approach can get down to 0.01% (2000 samples per channel).
+
+the referernced article above got me thinking. I may be able to jointly estimate the A/B/C parameters of the voltage and current signals. That would create a 6-parameter variant.
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+#define PI                                        3.14159265359        //pi
+#define _2PI                                (2*PI)                //2 * pi
+
+typedef struct {
+    double A, B, C;                        //fitted cosine wave: yn = A * cosine(wt) + B * sine(wt) + C
+    double A0, theta;                //fitted cosine wave: yn = A0 * cosine(wt + theta) + C
+} FITTED_COSINE_T;
+
+typedef struct {
+    double Z;                                //parallel / serial impedance
+    double Zr, Zi;                        //parallel/serial impmedance, real and imaginary
+    //double Sr, Si;                //serial impedance, real and imaginary
+    double theta;                        //angles
+    double Q;                                //Q factor
+    double LC;                                //dut's resistance, L(uh) or C(ph)
+} IMPEDANCE_T;
+
+#define M                200                                                //number of data samples, unsigned short
+#define N                 (M * f_osc / 10)                                //sample per period
+unsigned short voltn[M], curtn[M];                                //data samples
+FITTED_COSINE_T volt, curt;                        //voltage / current vectors
+double f_osc=10000.0;                                        //sample frequency, in hz
+
+//impedance measurement
+double Rm=1000.0;                                        //measurement resistor, in ohm
+IMPEDANCE_T dut;                                        //device undertest
+
+//generate adc data
+void data_gen(        unsigned short length,                 //length of data
+                unsigned short *buffer,                //output data buffer
+                double A,                                        //gain for the sine term
+                double B,                                        //gain for the cosine term
+                double C,                                        //constant
+                double error_gain                        //gain for the error term
+             ) {
+    unsigned short n;                                                //loop index
+
+    //srand(1235);                                                        //seed the random number generator
+    for (n=0; n<length; n++) buffer[n]=        A * cos(_2PI * f_osc * n / N) +                //sine term
+                                                                                B * sin(_2PI * f_osc * n / N) +                //cosine term
+                                        C +                                                                //constant
+                                        error_gain * (rand() / 32768.0 - 0.5);        //error term, mean = 0.0
+    //return;
+}
+
+//generate adc data
+void data_gen1(        unsigned short length,                 //length of data
+                unsigned short *buffer_v,        //output data buffer
+                unsigned short *buffer_c        //output data buffer
+             ) {
+    unsigned short n;                                                //loop index
+        double amplitude = 100;                                        //osc amplitude
+        double theta_v = 10.0 / 360 * _2PI;                //voltage signal
+
+        //set up dut
+        dut.Z = 1000;                                                        //dut's impedance
+        dut.theta = -45.0 / 360 * _2PI;                        //theta. - for capacitance and + for inductance. converting from degrees to radius
+        dut.Zr = dut.Z * cos(dut.theta);
+        dut.Zi = dut.Z * sin(dut.theta);
+
+    //srand(1235);                                                        //seed the random number generator
+    for (n=0; n<length; n++) {
+            buffer_v[n]=        amplitude * cos(_2PI * f_osc * n / N + theta_v) +                //cosine term
+                    //B * sin(_2PI * f_osc * n / N) +                //sine term
+                    500 +                                                                //constant
+                    0.01 * amplitude * (rand() / 32768.0 - 0.5);        //error term, mean = 0.0
+            buffer_c[n]=        - 1* amplitude / dut.Z * Rm * cos(_2PI * f_osc * n / N + theta_v + dut.theta) +                //cosine term. negative due to the opamp being out of phase
+                    //B * sin(_2PI * f_osc * n / N) +                //sine term
+                    1000 +                                                                //constant
+                    0.01 * amplitude * (rand() / 32768.0 - 0.5);        //error term, mean = 0.0
+                //printf("buffer_v[%4d] = %10d, buffer_c[%4d] = %10d\n", n, buffer_v[n], n, buffer_c[n]);
+    }
+    //return;
+}
+//print buffer
+void data_prt(unsigned short length, unsigned short * buffer) {
+    unsigned short i;                                        //loop index
+    printf("simulated data\n");                        //simulated data to be printed
+    //for (i=0; i<length; i++) printf("buffer[%4d]=%5d\n", i, buffer[i]);
+    for (i=0; i<length; i++) printf("%5d\n", buffer[i]);
+
+}
+
+//ieee-std-1057, non-matrix 3 parameter sine curve fitting
+//ieee-std-1057 1994, P19
+void ieee1057_3(unsigned short length,                //sample data length
+                unsigned short * buffer,        //input sample data buffer
+                FITTED_COSINE_T * output        //vector data output
+               ) {
+    unsigned short n;                                                //index
+    double alphan, betan;                                        //sine / cosine terms
+    double sum_yn=0, sum_alphan=0, sum_betan=0;        //define the sums, on P19
+    double sum_alphanxbetan=0, sum_alphan2=0, sum_betan2=0;        //define the sums, on P19
+    double sum_ynxalphan=0, sum_ynxbetan=0, sum_yn2=0;        //define the sums, on P19
+    double Xn, Xd;                                                                //temp variables used in calculation
+
+    //calculate signal sums
+    for (n=0; n<length; n++) {
+        //calculate alpha / beta
+        alphan=cos(_2PI * f_osc * n / N);
+        betan=sin(_2PI * f_osc * n / N);
+
+        //caulate the sums
+        sum_yn += buffer[n];
+        sum_alphan += alphan;
+        sum_betan += betan;
+        sum_alphanxbetan += alphan * betan;
+        sum_alphan2 += alphan * alphan;
+        sum_betan2 += betan * betan;
+        sum_ynxalphan += buffer[n] * alphan;
+        sum_ynxbetan += buffer[n] * betan;
+        sum_yn2 += ((double)buffer[n]) * buffer[n];        //to avoid overflow
+    }
+
+    //calculate An/Ad
+    Xn =         (sum_ynxalphan - sum_alphan * sum_yn / M) / (sum_alphanxbetan - sum_alphan * sum_betan / M) -
+            (sum_ynxbetan - sum_betan * sum_yn / M) / (sum_betan2 - sum_betan * sum_betan / M);
+    Xd =        (sum_alphan2 - sum_alphan * sum_alphan / M) / (sum_alphanxbetan - sum_alphan * sum_betan / M) -
+            (sum_alphanxbetan - sum_betan * sum_alphan / M) / (sum_betan2 - sum_betan * sum_betan / M);
+    output->A = Xn / Xd;
+    Xn =        (sum_ynxalphan - sum_alphan * sum_yn / M) / (sum_alphan2 - sum_alphan * sum_alphan / M) -
+            (sum_ynxbetan - sum_betan * sum_yn / M) / (sum_alphanxbetan - sum_betan * sum_alphan / M);
+    Xd =        (sum_alphanxbetan - sum_alphan * sum_betan / M) / (sum_alphan2 - sum_alphan * sum_alphan / M) -
+            (sum_betan2 - sum_betan * sum_betan / M) / (sum_alphanxbetan - sum_betan * sum_alphan / M);
+    output->B = Xn / Xd;
+    output->C = sum_yn / M - output->A * sum_alphan / M - output->B * sum_betan / M;
+
+    //alternative output
+    output->A0 = sqrt(output->A * output->A + output->B * output->B);
+    output->theta = atan(-output->B / output->A);
+    //output->theta += (output->A < 0)? PI: 0;
+}
+
+//calculate impedance (Zdut)
+//measurement approach: autobalancing bridge
+//connection:
+//
+//            - volt (sampling point)                - curt (sampling point)
+//            |                                      |
+//            |                                      |
+//            |    ------               ------       |
+// Vosc---------- | Zdut |-------------|  Rm  |-------
+// (freq=f_osc)    ------      |        ------       |
+//                             |                     |
+//                             |       |------|      |
+//                             |-------|-     |      |
+//                                     |Amp  O|------|
+//                             |-------|+     |
+//                             |       |------|
+//                           Vbias
+//                             |
+//                             |
+//                            --- (GND)
+//                             -
+//
+void impedance(FITTED_COSINE_T * voltage, FITTED_COSINE_T * current, IMPEDANCE_T * dut) {
+    //double tmp;                                                                //temperary variable
+
+    //calculate current through Rm
+    //tmp = current.A0 / Rm;
+    dut->Z = voltage->A0 * Rm / current->A0;                // tmp;
+    dut->theta = /*-*/(current->theta - voltage->theta);        //eliminate '-' as the current signal is out of phase.
+    dut->Zi= dut->Z * sin(dut->theta);
+    dut->Zr= dut->Z * cos(dut->theta);
+
+    //calculate L or C
+    if (dut->theta < 0) {                                        //capacitive load
+        dut->LC = -1.0 / (dut->Zi * _2PI * f_osc);        //calculate C, in f
+    } else {
+        dut->LC = dut->Zi / (_2PI * f_osc);        //calculate L, in H
+    }
+}
+
+//perform the calculation for dut's impedance / LCR parameters
+void Z_measure(        unsigned short length,                //length of data sample
+                                unsigned short *voltage,        //voltage data array
+                                unsigned short *current,        //current data array
+                                IMPEDANCE_T *dut)                         //device data measurement. Output
+                                {
+        //FITTED_COSINE_T volt, curt;                        //temp variables.
+        ieee1057_3(length, voltage, &volt);        //covert the voltage
+        ieee1057_3(length, current, &curt);                //covert the current
+        //curt.theta = - curt.theta;                                        //current signal measured 180 degrees opposite
+        impedance(&volt, &curt, dut);                                //calculate the impedance
+}
+
+int main(void) {
+    //generate simulated data
+    //data_gen(M, voltn, 500, 100, 1000, 10);        //voltage signal
+    //data_prt(M, voltn);                                        //print out data
+    //data_gen(M, curtn, 100, 200, 2000, 10);        //current signal
+    //data_prt(M, currentn);
+
+        //simulated data generation
+        data_gen1(M, voltn, curtn);                                //load specification in data_gen1()
+
+    //calculate the voltage signal
+    ieee1057_3(M, voltn, &volt);
+    printf("volt.A = %10.2f, volt.B = %10.2f, volt.C = %10.2f\n", volt.A, volt.B, volt.C);
+    printf("volt.A0 = %10.2f, volt.theta = %10.2f\n", volt.A0, volt.theta);
+
+    //calculate the current signal
+    ieee1057_3(M, curtn, &curt);
+    printf("curt.A = %10.2f, curt.B = %10.2f, curt.C = %10.2f\n", curt.A, curt.B, curt.C);
+    printf("curt.A0 = %10.2f, curt.theta = %10.2f\n", curt.A0, curt.theta);
+
+    //estimate dut's impedance parameters
+    impedance(&volt, &curt, &dut);
+
+        //alternatively, use the following call to convert the data
+        //Z_measure(M, voltn, curtn, &dut);
+    printf("dut.Z = %10.2fohm, dut.Zr = %10.2fohm, dut.Zi = %10.2fohm\n", dut.Z, dut.Zr, dut.Zi);
+    printf("dut.theta = %10.2f\n", dut.theta);
+    printf("dut.Zr = %10.2f, dut.Zi = %10.2f, dut.%1s = %10.2e(u%1s)\n", dut.Zr, dut.Zi, (dut.Zi < 0)?"C":"L", dut.LC*1e6, (dut.Zi < 0)?"f":"h");
+    return 0;
+}
+
+It is practically identical to the one I posted a couple days ago, with the following exception:
+
+1) notational changes: I moved to a notation system identical to IEEE1057's.
+2) implemented a data generation module: data_gen1() generates two vectors, based on a voltage signal (buffer_v[]), and a current signal (buffer_c[]). buffer_c[] is generated assuming that the voltage signal runs through a known impedance (specified as dut in the data_gen1() routine), then go through an inverting amplifier with Rm as its feedback resistor -> aka an autobalancing bridge.
+
+In this particular case, we are assuming a dut with impedance of 1kohm, and -45 degrees of Rx (a capacitor of 22.5079n @ 10Khz). We expect that our code should estimate such parameters. Here is the output:
+
+
+volt.A =      98.52, volt.B =     -17.38, volt.C =     499.45
+volt.A0 =     100.04, volt.theta =       0.17
+curt.A =     -81.92, curt.B =     -57.35, curt.C =     999.49
+curt.A0 =     100.00, curt.theta =      -0.61
+dut.Z =    1000.42ohm, dut.Zr =     707.40ohm, dut.Zi =    -707.41ohm
+dut.theta =      -0.79
+dut.Zr =     707.40, dut.Zi =    -707.41, dut.C =   2.25e-02(uf)
+
+So we have Z = 1000.42ohm vs. 1000ohm, C of 22.4983n vs. 22.5079n.
+
+That's pretty good.
+
+3) one small note: for convenience purposes, I introduced a new routine, Z_measure(), which essentially estimates dut's parameters from the sampled data series. You can obtain the same results via calling ieee1057_3() or impedance(), as I did in the code above.
+
+

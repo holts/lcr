@@ -1,0 +1,262 @@
+To do:
+
+Two things:
+
+1) we will need to implement this on a mcu to get a real-life sense as to its accuracy / performance.
+2) we will need to deal with a sampling delay. The code above assumes that the voltage + current signals are sampled at exactly the same time. The article jt6245 quoted above achieved that via the use of two independent adcs, one for the voltage and another for the current signal. I think that's an overkill. You can solve that via a software correct, as long as the delay is known - which is the case here.
+
+When I come back, I will implement a software DDS to produce a sine wave with known frequency. Buffer that and then drive our dut.
+
+Target MCU:
+
+The system will be fairly demanding on the adc module - to perform adc fast enough. The demand for space is dependent on the length specified by the user (M). I think 1000 - 2000 samples (per channel) should be sufficient. That means a mcu with 4 - 8k of ram, minimum.
+
+To start, I will pick a pic24f. But others should work as well.
+
+pic24f_lcr.png
+
+
+#include <pic24.h>                                                //we use pic24f
+#include <string.h>                                                //we use strcpy
+#include "config.h"                                                //configuration words
+#include "gpio.h"
+#include "delay.h"                                                //we use software delay
+#include "misc.h"                                                //we use ultoa
+#include "lcd_3wi.h"                                        //we use lcd_3wi
+#include "ieee1057.h"                                        //we use ieee1057 3-parameter routines
+
+//hardware configuration
+#define OUT_PORT                PORTB
+#define OUT_DDR                        TRISB
+#define OUT_PIN                        (1<<0)
+//end hardware configuration
+
+const unsigned char str0[]="PIC24F LCR v1.00";
+const unsigned char str1[]="Zr=     Zi=     ";
+unsigned char vRAM[17];                                        //display buffer
+
+void lcr_init(void) {
+        strcpy(vRAM, str0); lcd_display(LCD_Line0, vRAM); delay_ms(100);        //display signon message
+}
+
+void mcu_init(void) {
+        //turn off all peripherals
+        PMD1=0xffff;
+        PMD2=0xffff;
+        PMD3=0xffff;
+#if defined(PMD4)
+        PMD4=0xffff;
+#endif
+
+        //all pins digital
+        AD1PCFG = 0xffff;                                        //all pins digital
+
+        //initialize out_pin
+        IO_CLR(OUT_PORT, OUT_PIN);
+        IO_OUT(OUT_DDR, OUT_PIN);
+}
+
+int main(void) {
+        mcu_init();                                                        //reset the mcu
+        lcd_init();                                                        //initialize the lcd module
+        lcr_init();                                                        //initialize the lcr module
+        while (1) {
+                //display the estimation
+                strcpy(vRAM, str1);
+                ultoa(&vRAM[3], dut.Z, 5); ultoa(&vRAM[11], dut.Zi, 5);
+                lcd_display(LCD_Line1, vRAM);
+
+                //simulate adc data
+                data_gen1(M, voltn, curtn);
+                //start timing
+                IO_SET(OUT_PORT, OUT_PIN);
+                //estimate the impedance
+                Z_measure(M, voltn, curtn, &dut);
+                //flip out_pin
+                IO_CLR(OUT_PORT, OUT_PIN);
+                delay_ms(100);
+        }
+}
+
+I ran the code posted above, other than changing the dut.theta to +45 degrees to accomodate my particular ultoa code.
+
+Good news:
+1) It definitely worked, without any modification to the underlying ieee1057 code.
+2) code is fairly efficient. My flash usage is only 9KB and my ram usage is 4KB (almost exclusively due to the sample). So implementing this on a smaller mcu is definitely doable.
+
+Bad news: It took about 2.8 seconds to process 2000 pairs of data on a 16Mhz pic24f. I haven't tweak the compiler settings yet but that sounds like too long to be true. I will study that later.
+
+
+1) I wrote the display routine. It now shows two formats, one for ESR and another for lcr parameters.
+
+Displaying ESR:
+lcrmeter displayesr.PNG
+
+Displaying LCR:
+lcrmeter displaylc.PNG
+
+2) I also wrote routine to generate 10khz square wave, utilizing the pic24f's pwm module.
+
+
+#include <pic24.h>                                                //we use pic24f
+#include <string.h>                                                //we use strcpy
+#include "config.h"                                                //configuration words
+#include "gpio.h"
+#include "delay.h"                                                //we use software delay
+#include "misc.h"                                                //we use ultoa
+#include "lcd_3wi.h"                                        //we use lcd_3wi
+#include "ieee1057.h"                                        //we use ieee1057 3-parameter routines
+#include "pwm1.h"                                                //we use pwm to generate square wave
+#include "pwm5.h"
+
+//hardware configuration
+#define OUT_PORT                PORTB
+#define OUT_DDR                        TRISB
+#define OUT_PIN                        (1<<0)
+//end hardware configuration
+
+#define LCR_DISPLAYESR        0                                //display esr
+#define LCR_DISPLAYLC        1                                //display lc
+
+const unsigned char str0[]="PIC24F LCR v1.00";                        //sign-on message
+const unsigned char str1[]="R=      k\002 v1.00";                //showing real part of the impedance
+const unsigned char str2[]="\001=+     k\002 Q=   ";        //showing ESR / imaginary part of the impedance
+const unsigned char str2l[]="L=      uh Q=   ";                        //showing inductance + Q
+const unsigned char str2c[]="C=      pf Q=   ";                        //showing capacitance + Q
+//esr char
+const unsigned char font_ESR[]={
+        0x1f,
+        0x10,
+        0x1b,
+        0x12,
+        0x1b,
+        0x01,
+        0x1f,
+        0x00};
+//ohm char
+const unsigned char font_Ohm[]={
+        0x0e,
+        0x11,
+        0x11,
+        0x11,
+        0x0a,
+        0x0a,
+        0x1b,
+        0x00};
+
+const unsigned char range_resistor[]={'m', ' ', 'k', 'M'};
+const unsigned char range_capacitor[]={'p', 'n', 'u', 'm'};
+const unsigned char range_inductor[]={'n', 'u', 'm', ' '};
+
+unsigned char vRAM[17];                                        //display buffer
+
+//initialize the lcr module
+void lcr_init(void) {
+        strcpy(vRAM, str0); lcd_display(LCD_Line0, vRAM); delay_ms(100);        //display signon message
+        //load special characters
+        lcd_cgram(1, font_ESR);
+        lcd_cgram(2, font_Ohm);
+}
+
+//void display dut parameters
+//display_lc: 1: display l/c parameters; 0: display ESR/imaginary data
+//with expotential smoothing controlled by weight
+void lcr_display(IMPEDANCE_T * dut,  unsigned char display_lc) {
+        static double tmp_Zr=0, tmp_Zi=0, tmp_L=0, tmp_C=0;                                                                //temporary variable
+        double tmp;
+        const double weight=0.5;                                //controls weighing. higher "weight" causes faster / volatile changes
+        //for line0
+        //display dut.Zr
+        //provides some ranging
+        strcpy(vRAM, str1);
+        tmp_Zr+=weight* (dut->Zr - tmp_Zr); tmp = tmp_Zr;
+        if (tmp > 99999e3) {ultoa(&vRAM[3], tmp / 1e6, 5); vRAM[8]=range_resistor[3];}        //potentially out of range
+        else if (tmp > 99999) {ultoa(&vRAM[3], tmp / 1e3, 5); vRAM[8]=range_resistor[2];}
+        else if (tmp > 99.999) {ultoa(&vRAM[3], tmp, 5); vRAM[8]=range_resistor[1];}
+        else {ultoa(&vRAM[3], tmp * 1e3, 5); vRAM[8]=range_resistor[0];}
+        lcd_display(LCD_Line0, vRAM);
+
+        //for line1
+        //display dut.Zi
+        //provides some ranging
+        if (display_lc==LCR_DISPLAYESR) {
+                strcpy(vRAM, str2);
+                tmp_Zi+=weight * (dut->Zi - tmp_Zi); tmp = tmp_Zi;
+                if (tmp < 0) {vRAM[2]='-'; tmp = - tmp;}        //reverse the signedness
+                if (tmp > 99999e3) {ultoa(&vRAM[3], tmp / 1e6, 5); vRAM[8]=range_resistor[3];}        //potentially out of range
+                else if (tmp > 99999) {ultoa(&vRAM[3], tmp / 1e3, 5); vRAM[8]=range_resistor[2];}
+                else if (tmp > 99.999) {ultoa(&vRAM[3], tmp, 5); vRAM[8]=range_resistor[1];}
+                else {ultoa(&vRAM[3], tmp * 1e3, 5); vRAM[8]=range_resistor[0];}
+        } else {
+                if (dut->Zi > 0) {                                                        //inductance, in Henry
+                        strcpy(vRAM, str2l);
+                        tmp_L+=weight * (dut->LC - tmp_L); tmp = tmp_L;
+                        if (tmp > 99999e-3) {ultoa(&vRAM[3], tmp, 5); vRAM[8]=range_inductor[3];}        //potentially out of range
+                        else if (tmp > 99999e-6) {ultoa(&vRAM[3], tmp * 1e3, 5); vRAM[8]=range_inductor[2];}
+                        else if (tmp > 99999e-9) {ultoa(&vRAM[3], tmp * 1e6, 5); vRAM[8]=range_inductor[1];}
+                        else {ultoa(&vRAM[3], tmp * 1e9, 5); vRAM[8]=range_inductor[0];}
+                } else {                                                                        //capacitance, in Farady
+                        strcpy(vRAM, str2c);
+                        tmp_C+=weight * (dut->LC - tmp_C); tmp = tmp_C;                                                        //C in farady
+                        if (tmp > 99999e-6) {ultoa(&vRAM[3], tmp * 1e3, 5); vRAM[8]=range_capacitor[3];}        //potentially out of range
+                        else if (tmp > 99999e-9) {ultoa(&vRAM[3], tmp * 1e6, 5); vRAM[8]=range_capacitor[2];}
+                        else if (tmp > 99999e-12) {ultoa(&vRAM[3], tmp * 1e9, 5); vRAM[8]=range_capacitor[1];}
+                        else {ultoa(&vRAM[3], tmp * 1e12, 5); vRAM[8]=range_capacitor[0];}
+                }
+        }
+        //display Q
+        ultoa(&vRAM[13], (dut->Q > 999)?999:dut->Q, 3);                //3 digit display. max out at 999
+
+        //display line1
+        lcd_display(LCD_Line1, vRAM);
+}
+
+void mcu_init(void) {
+        //turn off all peripherals
+        PMD1=0xffff;
+        PMD2=0xffff;
+        PMD3=0xffff;
+#if defined(PMD4)
+        PMD4=0xffff;
+#endif
+
+        //all pins digital
+        AD1PCFG = 0xffff;                                        //all pins digital
+
+        //initialize out_pin
+        IO_CLR(OUT_PORT, OUT_PIN);
+        IO_OUT(OUT_DDR, OUT_PIN);
+}
+
+int main(void) {
+        mcu_init();                                                        //reset the mcu
+        lcd_init();                                                        //initialize the lcd module
+        lcr_init();                                                        //initialize the lcr module
+        //generate a waveform of F_LCR
+        pwm1_init();                                                        //initialize the pwm module
+        pwm1_set(F_CPU / F_LCR - 1, F_CPU / F_LCR / 2);                                //set frequency / duty cycle
+        while (1) {
+                //simulate adc data
+                data_gen1(M, voltn, curtn);
+
+                //start timing
+                IO_SET(OUT_PORT, OUT_PIN);
+                //estimate the impedance
+                Z_measure(M, voltn, curtn, &dut);
+                //flip out_pin
+                IO_CLR(OUT_PORT, OUT_PIN);
+
+                //display the estimation
+                lcr_display(&dut, LCR_DISPLAYESR);                //display esr or lc
+
+                //delay_ms(100);
+        }
+}
+
+LMS can equal out noises too, thus its ability to achieve more precision than the adc uncertainty may suggest.
+
+One big issue with this particular approach is
+
+1) the realignment of V/I sampling results - as we are using one adc and unable to delivery truly concurrent v/i sampling;
+2) and the range. Getting past 100moh or 1Mohm isn't difficult. However, getting past 10mohm or 10Mohm, without doing some trickery on the AFE will be very difficult.
+
