@@ -1,14 +1,14 @@
 ### uVision2 Project, (C) Keil Software
 ### Do not modify !
 
-Target (Target 1), 0x0000 // Tools: 'MCS-51'
+Target (myLCR), 0x0000 // Tools: 'MCS-51'
 
-Group (Source Group 1)
+Group (Src)
 
-File 1,1,<.\a.c><a.c> 0x0 
+File 1,1,<.\main.c><main.c> 0x0 
 
 
-Options 1,0,0  // Target 'Target 1'
+Options 1,0,0  // Target 'myLCR'
  Device (IAP12C5A60S2)
  Vendor (IAP12C5A60S2 Series)
  Cpu (IRAM(0-0xFF) XRAM(0-0x3FF) IROM(0-0xEFFF) CLOCK(45000000) MODP2)
@@ -29,7 +29,7 @@ Options 1,0,0  // Target 'Target 1'
  OrgReg ()
  TgStat=0
  OutDir (.\)
- OutName (uu)
+ OutName (myLCR)
  GenApp=1
  GenLib=0
  GenHex=1
