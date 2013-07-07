@@ -1,221 +1,187 @@
 
 #include <reg52.h>
+#include "config.h"
 #include "ptask.h"
- 
+#include "mylcr.h"
+#include "key.h"
+#include "adc.h"
+#include "pwm.h"
+#include "hd44780.h"
 
-sfr IAP_CONTR = 0xC7; 
-sfr WDT_CONTR = 0xC1;
-sbit KEY = P3^2;
-sbit LED1= P2^4;  
-unsigned char code numtab[16]={ 0x24,0x6F,0xE0,0x62,
-                     0x2B,0x32,0x30,0x67,
-                     0x20,0x22,0x21,0x38,
-                     0xB4,0x68,0xB0,0xB1
-                   };
-unsigned char keycount = 0;
+SEM InitSem(meter_fine)
 
-InitSem(task_Wait_flag)
+xdata unsigned char Fun_idx=FUN_R;   //当前功能索引
+xdata unsigned char Rang_idx=R40;    //当前量程索引
+xdata unsigned char Frq_idx=F1K;     //当前频率索引
+xdata unsigned char Mode_idx=MODE_S; //当前模式索引
+xdata unsigned char Gain_idx=GAIN1;  //当前增益索引
+xdata unsigned char Vxy_idx=VX_A;    //当前测量索引
+
+//增益表
+code float gainB[4] =  {  1,   3,   9,  27 };
+//各档电阻表
+code float resistorB[4] = { 40, 1e3, 1e4, 1e5 };
+//测量结果
+xdata int Vxy[12]={0,0,0,0,1,1}; //Vxy[Vx_a,Vy_b,Vx_c,Vy_d,g1,g2]
+//测量计数
+
+xdata struct Ida{
+ char zo[3];//三个频率下的零点改正值
+ char j1;   //相位补偿(3倍档)
+ char j2;   //相位补偿(10倍档)
+ char J[4];  //相位补偿(V/I变换器)
+ char R[4]; //下臂电阻修正(40,1k,10k,100k)
+ char g1;   //增益修正(3倍档)
+ char g2;   //增益修正(10倍档)
+ char phx; //1kHz以下相位改正
+ char R4b; //100k档7.8kHz频率下的幅度补偿
+ char G2b; //9倍档7.8kHz频率下的幅度补偿
+ char feq; //频率修正
+ char ak;  //AD斜率修正
+ float QRs[3],QXs[3]; //短路清零数据
+ float QRo[3],QXo[3]; //开路清零数据
+} cs;
 
 /***********************************************************************
 Function : WDTC
-Input    : 
-Output   : 
-Return   : 
-Stacks   : 1
 Note     : 清除看门狗
-Updata   : 2013-06-18
 ***********************************************************************/
 void WDTC()
 { WDT_CONTR =0x3C; }
 
 /***********************************************************************
-Function : Init_IO
-Input    : 
-Output   : 
-Return   : 
-Stacks   : 1
-Note     : 
-Updata   : 2013-06-18
-***********************************************************************/
-void Init_IO()
-{
-   //     P3M0 = 0x00;
-	//P3M1 = 0x00;
-	P1 = 0xff;         //关LED数码管显示
-	KEY = 1;		
-}
-	
-/***********************************************************************
-Function : Init_TMR0
-Input    : 
-Output   : 
-Return   : 
-Stacks   : 1
-Note     : 初始化定时器，产生10ms中断
-Updata   : 2013-06-18
-***********************************************************************/
-void Init_TMR0()
-{
-	TMOD = 0x21;
-	IE |= 0x82;                            
-	TL0 = 0Xff;
-	TH0 = 0Xb7;
-	TR0 = 1;
-}
-
-/***********************************************************************
 Function : INTT0 interrupt
-Input    : 
-Output   : 
-Return   : 
-Stacks   : 1
 Note     : 定时器中断处理函数
 Updata   : 2013-06-18
 ***********************************************************************/
 void INTT0(void) interrupt 1 using 1
 {
-	TL0=0Xff;    // 10ms 重装
-	TH0=0Xb7;
-	
+	TH0 = 0xF5, TL0 = 0x95;    //1ms定时重装
         UpdateTimers();
 }
 
+
 /***********************************************************************
-Function : Task0_led
-Input    : 
-Output   : 
-Return   : 
-Stacks   : 
-Note     : 任务一，
-           LED1引脚接在发光管负极，
-           LED1=0 为亮，LED1=1为灭
-Updata   : 2012-12-04
+Function : setGain
+Note     : 设置电路增益
 ***********************************************************************/
-unsigned char Task0_led()
-{
-    _SS
-	while(1)
+void setGain(unsigned char switch_sts){
+  if (switch_sts!=Gain_idx) { Gain_idx=switch_sts; }
+  else  { Gain_idx = (Gain_idx+1)%4; }
+ 
+  K4 = Gain_idx & 2, K6 = Gain_idx & 1; //1倍--27倍
+}
+
+
+/***********************************************************************
+Function : Init
+Note     : 初始化 
+***********************************************************************/
+void Init(void)
+{	//定时器初始化
+        TCON=0, TMOD=0x11; //将T0置为16位定时器，T1置为16位定时器
+        TH1 = 0, TL1 = 0;
+        TR1=1;  //T1开始计数
+	TH0 = 0xF5, TL0 = 0x95;    //1ms定时
+        TR0=1;  //T0开始计数
+ 	ET1=1;  //T1开中断
+	ET0=1;  //T0开中断
+
+	ADC_Init(0);    //设置AD转换通道为P1.0
+
+ 	P1M0 = 0xFC;    //P1.234567置为推换口
+ 	P1M1 = 0x03;    //P1.01置为高阻抗
+ 	P2M0 = 0xFF;    //P2.01234567置为推勉输出
+ 	P2 = 0x0F; 
+
+	PWM_Init();   //DDS初始化 把PCA置为PWM
+	
+	EA=1;   //开总中断
+
+ 	set90(2);   //初始设置相位
+ 	setRng(Rang_idx);  //初始设置量程
+ 	setGain(Gain_idx); //初始设置增益
+ 	setFrq(Frq_idx);    //DDS初始设置为1kHz	
+
+	LCD_INIT();
+
+	LCD_PrintString("LCR 3.0");
+        LCD_2ndRow();
+	LCD_PrintString("XJW Putian, 2012");
+}
+
+/***********************************************************************
+Function : calcLCR
+Note     : 计算LCR
+***********************************************************************/
+void calcLCR(void){
+	xdata float a=0,b=0,c=0;
+
+	a =  +(Vxy[VX_C] * Vxy[VX_C] + Vxy[VY_D] * Vxy[VY_D] );
+	b =  -( Vxy[VX_A] * Vxy[VX_C] + Vxy[VY_B] * Vxy[VY_D]);
+	c =  -(Vxy[VY_B] * Vxy[VX_C] - Vxy[VX_A] * Vxy[VY_D]);
+	
+	a /= resistorB[Rang_idx];  //除以下臂电阻阻值
+ 
+}
+
+/***********************************************************************
+Function : timerInter1
+Note     : T1中断，LCR数据采集
+***********************************************************************/
+void timerInter1(void) interrupt 3 {
+	Vxy[Vxy_idx] = ADC_Read();
+
+//	WaitSem(meter_fine);
+ 	Vxy_idx = (Vxy_idx + 1)%4;
+	set90(Vxy_idx);
+	if (Vxy_idx==VX_A) K3=1;
+	if (Vxy_idx==VX_C) K3=0;
+
+}
+
+/***********************************************************************
+Function : showR
+Note     : 显示LCR
+***********************************************************************/
+void showR(void){ 
+	//显示频率
+	LCD_Locate(2,0);
+	if (Frq_idx==F100) LCD_PrintChar('A');
+	if (Frq_idx==F1K) LCD_PrintChar('B');
+	if (Frq_idx==F7K8) LCD_PrintChar('C');
+	//显示量程
+	if (Mode_idx==MODE_S)//串联
 	{
-	    LED1 = !LED1;
-	    if (LED1) 
-		{WaitX(45);}
-	    else WaitX(5);
+		LCD_Locate(1,0);
+		LCD_PrintString("Zp");
 	}
-    _EE
-}
-
-/************************************************
-Function : Task0_key
-Input    : 
-Output   : 
-Return   : 
-Stacks   : 
-Note     : 任务二
-Updata   : 2012-12-04
-************************************************/
-unsigned char Task1_key()
-{
-    static bit SameKey_F = 0;
-
-   _SS
-	while(1)
+	if (Mode_idx==MODE_P)//并联
 	{
-        if(KEY) 
-        {
-            if((++keycount >= 20)&&(!SameKey_F))
-            { 
-                IAP_CONTR = 0x60;
-		SameKey_F = 1;
-               
-            }    
-        }
-        else
-        {
-            keycount = 0;
-	    SameKey_F = 0;
-        }
-	//Ints_event_send(Task2_ID);
-	SendSem(task_Wait_flag);
-        WaitX(5);	 
+		LCD_Locate(1,0);
+		LCD_PrintString("Zs");
 	}
-      _EE
+	  
 }
 
-
-/************************************************
-Function : subtask
-Input    : 
-Output   : 
-Return   : 
-Stacks   : 
-Note     : 这是一个子任务函数
-Updata   : 2012-12-04
-************************************************/
-unsigned char  subtask()
-{
-    static char i;
-    
-    _SS
-    while(1)
-    {
-        for(i=0;i<=5;i++)
-	{
-	P1=numtab[i];
-        //Task_event_wait(wait_ever);
-	WaitSem(task_Wait_flag);
-        }
-	}
-    _EE
-}
-
-
-/************************************************
-Function : Task2_display
-Input    : 
-Output   : 
-Return   : 
-Stacks   : 
-Note     : 任务三，“线程”写法,复杂任务请用这种
-           方式来写，比传统状态机写法更简单，
-           更自然，而且更省ROM！
-           顶层任务的任何地方都可以调用子任务
-Updata   : 2012-12-04
-************************************************/
-unsigned char  Task2_display()
-{
-    static char i;
-    
-    _SS 
-    while(1)
-    {
-        for(i=0;i<=9;i++)                                                               //先从0--9快速显示，间隔200mS
-        {
-       	P1=numtab[i];
-        WaitX(20);
-        }
-        for(i=0;i<=9;i++)                                                               //然后从0--9慢速显示，间隔500mS
-        {
-       	P1=numtab[i];
-//Task_event_wait(50);
-        WaitX(50);
-	//if(task_Wait_flag) { Task_subCall(subtask); }
-	if(task_Wait_flag)   { CallSub(subtask); }
-        }
-    }
-    _EE
-}
-
-
+/***********************************************************************
+Function : Main
+Note     : 主程序
+***********************************************************************/
 void main()
 {
-        Init_IO();
-	Init_TMR0();	  
-	
+    Init();
+    	
 	while(1)
 	{
   	   WDTC(); 
-           RunTaskA(Task0_led,Task0_ID);
-	   RunTaskA(Task1_key,Task1_ID);
-	   RunTaskA(Task2_display,Task2_ID);
-  	}
+	   RunTaskA(KeyProc,Task1_ID);
+	   if (meter_fine) 
+	   {
+		   calcLCR();
+		   SendSem(meter_fine);
+	   }
+	   showR();
+	}
 }
+

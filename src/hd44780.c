@@ -3,10 +3,49 @@
 #include <intrins.h>
 #include "macros.h"
 #include "delay.h"
-#include "config.h"
-#include "ptask.h"
+
+/***********************************************************************
+*MCU stc12c5a60s2
+*晶振 32MHz
+*LCD1602 4 位数据线程序
+*   端口名称              端口符号    LCD引脚　  MCU端口   
+*   RS数据/指令选择线        RS         4         P0^6     0命令1数据
+*   R/W读写选择线            R/W        5         P0^5     0写1读
+*   EN写使能线               EN         6         P0^4     使能位,下降沿触发
+*   数据总线                 D0-D3     7-10       NC
+*                            D4         11        P0^3
+*                            D5         12        P0^2
+*                            D6         13        P0^1
+*                            D7         14        P0^0
+*   其他端口连接：
+*   电源负                   VSS        1      
+*   电源正+4.5--+5.5V        VDD        2
+*   对比度调节 (接地最大)    VL         3 
+*   背光负                   BLK VSS    15    
+*   背光正                   BLA VDD    16
+***********************************************************************/
+
+#define LCD_1602
+//#define LCD_2004
+
+//#define LCD_8BIT      0x38	// LCD mode as 8-bit 2-line 5*8-dot 1/16Duty
+#define LCD_4BIT	0x28	// LCD mode as 4-bit 2-line 5*8-dot 1/16Duty
+
+/* LCDPort contains 4-bit data D4 to D7 */
+#define LCDPort P0
+
+/* Pins E,R/W and RS of LCD must be assigned to LCDControlPort*/
+#define LCDControlPort P0
+
+/* LCD Enable pin is assigned to Px1 */
+#define LCD_EN          4
+/* LCD R/W pin is assigned to Px5 */
+#define LCD_RW          5
+/* LCD RS pin is assigned to Px2 */
+#define LCD_RS          6
 
 /* Exported constants ------------------------------------------------*/
+
 #define LCD_CLS		0x01		// Clear LCD screen
 #define LCD_HOME	0x02		// LCD Return home
 #define LCD_ENTRY 	0x06		// Set LCD Entry Mode
@@ -27,8 +66,8 @@
 
 #define LCD_L1		0x80
 #define LCD_L2		0xC0
-//#define LCD_L3		0x90
-//#define LCD_L4		0xD0
+#define LCD_L3		0x90
+#define LCD_L4		0xD0
 
 const unsigned char CGRAM[LCD_CGMAX] =
 {
@@ -44,107 +83,112 @@ const unsigned char CGRAM[LCD_CGMAX] =
 };
 
 /* Exported macros ---------------------------------------------------*/
-#define SET_RS		sbi(LCDPort, LCD_RS_Pin)
-#define SET_RW 		sbi(LCDPort, LCD_RW_Pin)
-#define SET_EN 		sbi(LCDPort, LCD_Enable_Pin)
-#define CLR_RS 		cbi(LCDPort, LCD_RS_Pin)
-#define CLR_RW 		cbi(LCDPort, LCD_RW_Pin)
-#define CLR_EN 		cbi(LCDPort, LCD_Enable_Pin)
+#define SET_RS		sbi(LCDControlPort, LCD_RS)
+#define SET_RW 		sbi(LCDControlPort, LCD_RW)
+#define SET_EN 		sbi(LCDControlPort, LCD_EN)
+#define CLR_RS 		cbi(LCDControlPort, LCD_RS)
+#define CLR_RW 		cbi(LCDControlPort, LCD_RW)
+#define CLR_EN 		cbi(LCDControlPort, LCD_EN)
 
 
 /**
   * @brief  Check busy
   * @param  None
-  * @param  None
   * @retval if busy return true
   */
 bit LCD_Check_Busy(void) 
 { 
-  LCDControlPort = 0xFF; 
+#ifdef LCD_8BIT
+  LCDPort = 0xFF; 
+#elif defined(LCD_4BIT)
+  LCDPort = 0xF0;
+#endif
   CLR_RS; 
   SET_RW; 
   CLR_EN; 
   _nop_(); 
   SET_EN;
-  return (bit)(LCDControlPort & 0x80);
+  return (bit)(LCDPort & 0x80);
 }
 
 /**
   * @brief  Command data sent to LCD module
   * @param  command value to be sent
-  * @param  None
   * @retval None
   */
-unsigned char LCD_CMD(unsigned char cmd_data)
+void LCD_CMD(unsigned char cmd_data)
 {  
   while(LCD_Check_Busy()); //忙则等待
   CLR_RS; 
   CLR_RW; 
+
+#ifdef LCD_4BIT
   SET_EN; 
-  LCDControlPort = cmd_data; 
+  LCDPort = ( (LCDPort & 0x0F) | ((cmd_data << 4) & 0xF0) ); 
   _nop_(); 
   CLR_EN;
+  _nop_();
+  SET_EN;
+  LCDPort = ( (LCDPort & 0x0F) | (cmd_data & 0xF0) );
+  _nop_();
+  CLR_EN;
+#elif  defined(LCD_8BIT)
+  SET_EN; 
+  LCDPort = cmd_data; 
+  _nop_(); 
+  CLR_EN;
+#endif  
 }
 
 /**
   * @brief  Set Cursor on second row 1st digit
   * @param  None
-  * @param  None
   * @retval None
   */
-unsigned char LCD_2ndRow(void)
+void LCD_2ndRow(void)
 { LCD_CMD(LCD_L2); }
 
 /**
   * @brief  Set Cursor to Home position
   * @param  None
-  * @param  None
   * @retval None
   */
-unsigned char LCD_Home(void)
+void LCD_Home(void)
 {
   LCD_CMD(LCD_HOME);
-  _SS
-	  while(1) 
-	   {WaitX(2);}
-  _EE
-  //DelayMs(2);
+  DelayMs(2);
 }
 
 /**
   * @brief  Shift cursor to left
   * @param  None
-  * @param  None
   * @retval None
   */
-unsigned char LCD_LShift(void)
+void LCD_LShift(void)
 { LCD_CMD(0x18); }
 
 /**
   * @brief  Shift cursor to right
   * @param  None
-  * @param  None
   * @retval None
   */
-unsigned char LCD_RShift(void)
+void LCD_RShift(void)
 { LCD_CMD(0x1C); }
 
 /**
   * @brief  Set Display cursor
   * @param  None
-  * @param  None
   * @retval None
   */
-unsigned char LCD_CursorOn(void)
+void LCD_CursorOn(void)
 { LCD_CMD(0x0C); }
 
 /**
   * @brief  Set Hide cursor
   * @param  None
-  * @param  None
   * @retval None
   */
-unsigned char LCD_CursorOff(void)
+void LCD_CursorOff(void)
 { LCD_CMD(0x08); }
 
 /**
@@ -153,7 +197,7 @@ unsigned char LCD_CursorOff(void)
   * @param  Column Number (1 to 16) Assuming a 2 X 16 characters display
   * @retval None
   */
-unsigned char LCD_Locate(unsigned char row, unsigned char column)
+void LCD_Locate(unsigned char row, unsigned char column)
 {
   column--;
   if (row == 1)
@@ -164,15 +208,11 @@ unsigned char LCD_Locate(unsigned char row, unsigned char column)
   {   /* Set cursor to 2nd row address and add index*/
       LCD_CMD(column |= LCD_L2);
   }
-#if defined(LCD_L3)
+#if defined(LCD_2004)
   else if (row == 3)
-  {
-  }
-#endif
-#if defined(LCD_L4)
+  {   LCD_CMD(column |= LCD_L3); }
   else if (row == 4)
-  {
-  }
+  {   LCD_CMD(column |= LCD_L4); }
 #endif
   
 }
@@ -181,36 +221,38 @@ unsigned char LCD_Locate(unsigned char row, unsigned char column)
 /**
   * @brief  Print Character on LCD module
   * @param  Ascii value of character
-  * @param  None
   * @retval None
   */
-unsigned char LCD_PrintChar(unsigned char ascode)
+void LCD_PrintChar(unsigned char ascode)
 { 
   while(LCD_Check_Busy()); //忙则等待
   SET_RS; 
-  CLR_RW; 
-  SET_EN; 
+  CLR_RW; 	
 #ifdef LCD_4BIT
-  LCDPort = ascode & 0xF0;  //Higher 4-bit
+  SET_EN; 
+  LCDPort = ( (LCDPort & 0x0F) | ((ascode << 4) & 0xF0) );  //Lower 4-bit
   _nop_();
   CLR_EN;
   _nop_();
-  SET_EN;
-  LCDPort = ascode << 4;    //Lower 4-bit
+ 
+  SET_EN; 
+  LCDPort =  ( (LCDPort & 0x0F) | (ascode & 0xF0) );   //Higher 4-bit
+  _nop_();
+  CLR_EN;
 #elif defined(LCD_8BIT)
-  LCDPort = ascode; 
-#endif
+  SET_EN; 
+  LCDPort = ascode;   
   _nop_();
   CLR_EN;
+#endif
 }
 
 /**
   * @brief  Display of a characters string
   * @param  Text to be displayed
-  * @param  None
   * @retval None
   */
-unsigned char LCD_PrintString(unsigned char *text)
+void LCD_PrintString(unsigned char *text)
 {
  do { LCD_PrintChar(*text++); } while (*text != '\n');
  //while(*text) {LCD_printchar(*text++);}
@@ -222,7 +264,7 @@ unsigned char LCD_PrintString(unsigned char *text)
   * @param  Number of characters defined in the table
   * @retval None
   */
-unsigned char LCD_Load_CGRAM(char tab[], unsigned char charnum)
+void LCD_Load_CGRAM(char tab[], unsigned char charnum)
 {
   unsigned char index;
   /* Each character contains 8 definition values*/
@@ -239,10 +281,9 @@ unsigned char LCD_Load_CGRAM(char tab[], unsigned char charnum)
 /**
   * @brief  Clear LCD module display
   * @param  None
-  * @param  None
   * @retval None
   */
-unsigned char LCD_Clear(void)
+void LCD_Clear(void)
 {
   LCD_CMD(LCD_CLS);
   DelayMs(2);
@@ -251,10 +292,9 @@ unsigned char LCD_Clear(void)
 /**
   * @brief  Initializes HD44780 LCD module in 4-bit mode
   * @param  None
-  * @param  None
   * @retval None
   */
-unsigned char LCD_INIT(void)
+void LCD_INIT(void)
 {
   SET_EN;
   CLR_RS;
@@ -274,223 +314,3 @@ unsigned char LCD_INIT(void)
   DelayMs(200);
 }
 
-
-/*------------------------------------------------
-// PORT initialization
-void port_ini(void)
-{
-	LCD_CTRL_DDR = 0x07;
-	LCD_DATA_DDR = 0xFF;
-}
-
-// Write a Data or Command to LCD
-void SendByte(u8 DatCmd, u8 dByte)
-{
-	if (DatCmd == 0)
-		CLR_RS;
-	else
-		SET_RS;
-	CLR_RW;
-	PTK_BEGIN
-		while(1)
-		{
-	#ifdef LCD_4BIT
-		SET_EN;
-		LCDPort = dByte & 0xF0;	//Higher 4-bit
-		//DelayUs(50);
-		Task_delay(1);
-		CLR_EN;
-		//DelayUs(50);
-		Task_delay(1);
-		SET_EN;
-		LCDPort = dByte << 4;	//Lower 4-bit
-		//DelayUs(50);
-		Task_delay(1);
-		CLR_EN;
-	#elif defined(LCD_8BIT)
-		SET_EN;
-		LCDPort = dByte;
-		//DelayUs(50);
-		Task_delay(1);
-		CLR_EN;
-	#endif
-		}
-	PTK_END
-}
-
-// Write a string to LCD
-void SendStr(u8 *ptString)
-{
-	while((*ptString)!='\0')
-	{ SendByte(iDat, *ptString++); }
-}
-
-// Send a Number less than 255
-void SendNbr(u8 Number)
-{
-	u8 *temp;
-	temp = NumberToChar(Number);
-	SendByte(iDat, *temp++);
-	SendByte(iDat, *temp++);
-	SendByte(iDat, *temp);
-}
-
-// Move Cursor or display
-void Move(u8 dir)
-{ SendByte(iCmd, dir); }
-
-// Goto specific location
-void Gotoxy(u8 Row, u8 Col)
-{
-	switch (Row)
-	{
-		#if defined(LCD_L2)
-		case 2:
-			SendByte(iCmd, LCD_L2 + Col); break;
-		#endif
-		#if defined(LCD_L3)
-		case 3:
-			SendByte(iCmd, LCD_L3 + Col); break;
-		#endif
-		#if defined(LCD_L4)
-		case 4:
-			SendByte(iCmd, LCD_L4 + Col); break;
-		#endif
-		default:
-			SendByte(iCmd, LCD_L1 + Col); break;
-	}	
-}
-
-// Clear LCD Screen
-void Clear(void)
-{
-	SendByte(iCmd, LCD_CLS);
-	//DelayMs(3);
-	Task_delay(2);
-	// 2ms delay is Necessary after sending LCD_CLS command !!!
-}
-
-// Wait some time and clear screen
-void wait_and_clear(void)
-{
-	//DelayMs(1500);
-	Task_delay(1500);
-	Clear();
-}
-
-// Fill CGRAM with array CGRAM[]
-void FillCGRAM(void)
-{
-	u8 i;
-	SendByte(iCmd, LCD_CGRAM_ADDR);
-	for (i = 0; i < LCD_CGMAX; i++)
-	{ SendByte(iDat, CGRAM[i]); }
-}
-
-// Show All patterns in CGRAM
-void ShowCGRAM(void)
-{
-	u8 i,k;
-	for (i = 0; i < 8; i++)
-	{
-		SendByte(iCmd, LCD_L1);
-		for (k = 0; k < LCD_CHAR; k++)
-		{
-			#if defined(LCD_L2)
-			switch (k)
-			{
-				case LCD_COL:
-				SendByte(iCmd, LCD_L2); break;
-				#if defined(LCD_L3)
-				case LCD_COL*2:
-				SendByte(iCmd, LCD_L3); break;
-				#endif
-				#if defined(LCD_L4)
-				case LCD_COL*3:
-				SendByte(iCmd, LCD_L4); break;
-				#endif
-				default:
-				break;
-			}
-			#endif
-			SendByte(iDat, i);
-		}
-		wait_and_clear();
-	}
-}
-
-// Call built-in Charactors
-void CallBultinChar(void)
-{
-	u8 i, k;
-	for (i = 0; i < LCD_COL; i += LCD_ROW)
-	{
-		SendByte(iCmd, LCD_L1);
-		for (k = 0; k < LCD_CHAR; k++)
-		{
-			#if defined(LCD_L2)
-			switch (k)
-			{
-				case LCD_COL:
-				SendByte(iCmd, LCD_L2); break;
-				#if defined(LCD_L3)
-				case LCD_COL*2:
-				SendByte(iCmd, LCD_L3); break;
-				#endif
-				#if defined(LCD_L4)
-				case LCD_COL*3:
-				SendByte(iCmd, LCD_L4); break;
-				#endif
-				default:
-				break;
-			}
-			#endif
-			SendByte(iDat, k + LCD_COL*i);
-		}
-		wait_and_clear();
-	}
-}
-// LCD initialize procedure
-void LCD_Initial(void)
-{
-	delay100ms();				// Wait for internal initialization
-	port_ini();
-	#ifdef LCD_4BIT
-		CLR_RS;
-		CLR_RW;
-		SET_EN;
-		LCD_DO = 0x20;	// Set Interface to 4-bit
-		DelayUs(50);
-		CLR_EN;
-	#endif
-	SendByte(iCmd, LCD_FUNCTION);	// Function Set
-	DelayUs(50);
-	SendByte(iCmd, LCD_ON);
-	DelayUs(50);
-	Clear();
-	SendByte(iCmd, LCD_ENTRY);	// Entry Mode Set
-	*/
-	/*
-	// Display system Info
-	#ifdef LCD_4BIT
-		Gotoxy(1, 4);
-		SendStr("LCD_4BIT");
-	#else
-		Gotoxy(1, 4);
-		SendStr("LCD_8BIT");
-	#endif	
-	Gotoxy(2,1);
-	SendStr("LCD_COLS: ");
-	SendNbr(LCD_COL);
-	Gotoxy(3,1);
-	SendStr("LCD_ROWS: ");
-	SendNbr(LCD_ROW);
-	Gotoxy(4,1);
-	SendStr("LCD_CHAR: ");
-	SendNbr(LCD_CHAR);
-	wait_and_clear();
-	*/
-	/*
-}
-
-*/

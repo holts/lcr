@@ -1,5 +1,7 @@
+#ifndef PTASK_H
+#define PTASK_H
 
-#define MAXTASKS 3
+#define MAXTASKS 8
 
 // task constant define
 #define Task0_ID      0
@@ -13,6 +15,7 @@
 #define Task8_ID      8
 
 volatile unsigned char timers[MAXTASKS];
+
 #define _SS static unsigned char _lc; switch(_lc){default: 
 #define _EE ;}; _lc=0; return 255;
 #define WaitX(tickets)  do {_lc=__LINE__+((__LINE__%256)==0); return tickets ;} while(0); case __LINE__+((__LINE__%256)==0): 
@@ -35,3 +38,4 @@ volatile unsigned char timers[MAXTASKS];
 //∑¢ÀÕ–≈∫≈¡ø
 #define SendSem(sem)  do {sem=0;} while(0);
 
+#endif

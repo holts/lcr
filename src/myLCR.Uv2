@@ -6,6 +6,10 @@ Target (myLCR), 0x0000 // Tools: 'MCS-51'
 Group (Src)
 
 File 1,1,<.\main.c><main.c> 0x0 
+File 1,1,<.\hd44780.c><hd44780.c> 0x0 
+File 1,1,<.\key.c><key.c> 0x0 
+File 1,1,<.\adc.c><adc.c> 0x0 
+File 1,1,<.\pwm.c><pwm.c> 0x0 
 
 
 Options 1,0,0  // Target 'myLCR'
@@ -27,7 +31,7 @@ Options 1,0,0  // Target 'myLCR'
  EnvLib ()
  EnvReg ()
  OrgReg ()
- TgStat=0
+ TgStat=11
  OutDir (.\)
  OutName (myLCR)
  GenApp=1

@@ -1,5 +1,5 @@
 
-#include "intrins.h"
+#include <intrins.h>
 
 //延时X微秒(STC12C5A60S2@12M) 不同的工作环境,需要调整此函数
 void DelayXus(unsigned char n)
@@ -21,6 +21,6 @@ void DelayMs(unsigned char t)
  {
      //大致延时1mS
      DelayXus(245);
-	 DelayXus(245);
+     DelayXus(245);
  }
 }

@@ -1,76 +1,10 @@
-//==========================================================================
-//  LCR±íÇı¶¯³ÌĞò V2.0
-//  Ğí½£Î° ÓÚÆÎÌï 2012.01
-//==========================================================================
-//==========================================================================
+
 #define uchar unsigned char
 #define uint  unsigned int
 #define ulong  unsigned long
 #include <reg52.h>
 #include <math.h>
 
-/****Ğ¡Ğ¡µ÷¶ÈÆ÷¿ªÊ¼**********************************************/
-#define MAXTASKS 8
-volatile unsigned char timers[MAXTASKS];
-#define _SS static unsigned char _lc; switch(_lc){default: 
-#define _EE ;}; _lc=0; return 255;
-#define WaitX(tickets)  do {_lc=__LINE__+((__LINE__%256)==0); return tickets ;} while(0); case __LINE__+((__LINE__%256)==0): 
-
-#define RunTask(TaskName,TaskID) do { if (timers[TaskID]==0) timers[TaskID]=TaskName(); }  while(0); 
-#define RunTaskA(TaskName,TaskID) { if (timers[TaskID]==0) {timers[TaskID]=TaskName(); continue;} }   //Ç°ÃæµÄÈÎÎñÓÅÏÈ±£Ö¤Ö´ĞĞ
-
-#define CallSub(SubTaskName) do {unsigned char currdt; WaitX(0); currdt=SubTaskName(); if(currdt!=255) return currdt;} while(0);
-
-#define UpdateTimers() {unsigned char i; for(i=MAXTASKS;i>0 ;i--){if((timers[i-1]!=0)&&(timers[i-1]!=255)) timers[i-1]--;}}
-
-#define SEM unsigned int 
-//³õÊ¼»¯ĞÅºÅÁ¿
-#define InitSem(sem) sem=0;
-//µÈ´ıĞÅºÅÁ¿
-#define WaitSem(sem) do{ sem=1; WaitX(0); if (sem>0) return 1;} while(0);
-//µÈ´ıĞÅºÅÁ¿»ò¶¨Ê±Æ÷Òç³ö£¬ ¶¨Ê±Æ÷tickets ×î´óÎª0xFFFE
-#define WaitSemX(sem,tickets)  do { sem=tickets+1; WaitX(0); if(sem>1){ sem--;  return 1;} } while(0);
-//·¢ËÍĞÅºÅÁ¿
-#define SendSem(sem)  do {sem=0;} while(0);
-
-/*****Ğ¡Ğ¡µ÷¶ÈÆ÷½áÊø*******************************************************/
-
-
-#define OFF    0
-#define ON     1
-#define RUN    0
-#define SETUP  1
-
-#define FUN_R      0
-#define FUN_C      1
-#define FUN_L      2
-#define FUN_S      3
-
-#define AUTO   0
-#define R40    1
-#define R100   2
-#define R1K    3
-#define R10K   4
-#define R100K  5
-
-#define KEY    ~P3^0xff
-#define KEY_M  0x08
-#define KEY_X  0x02
-#define KEY_R  0x07
-#define KEY_F  0x06
-#define KEY_C  0x04
-
-//==========================================================================
-// ÏîÄ¿£ºLCD1602 ËÄÏßÇı¶¯³ÌĞò
-// Éè¼ÆÒªµã£º
-//     LCD1602 µÄÔËĞĞËÙ¶ÈÂı£¬¶øµ¥Æ¬»úÔËĞĞµÄËÙ¶È¿ì£¬Òò´ËÈİÒ×ÒòÎªËÙ¶È²»
-//     Æ¥ÅäÔì³Éµ÷ÊÔÊ§°Ü¡£Òò´Ë£¬µ÷ÊÔÖ®Ç°Ó¦×¼È·²âÊÔlcd_delay() ÑÓÊ±º¯Êı
-//     ×¼È·µÄÑÓÊ±Á¿£¬Èç¹û²»ÄÜÂú×ã×¢ÊÍÖĞµÄÒªÇó£¬ÔòÓ¦µ÷ÕûÑ­´ÎÊı¡£Ã¿²½²Ù
-//     ×÷ËùĞèµÄÑÓÊ±Á¿£¬°´ÕÕÊı¾İÊÖ²áÖ¸±êÖ¸ĞĞ£¬Í¬Ê±ÁôÏÂ×ã¹»µÄÊ±¼äÓàÁ¿¡£
-// Ó²¼şÁ¬½Ó£º
-//     ÖÁÉÙĞèÒª9ÌõÏß£¬µçÔ´Ïß2Ìõ£¬7ÌõĞÅºÅÏß¡£ĞÅºÅÏßÏê¼û³ÌĞòÖĞµÄ½Ó¿Ú¶¨Òå¡£
-//     Çå×¢Òâ¶ÔLCD1602¶Ô±È¶ÈµÄµ÷½Ú£¬·ñÔòÎŞÏÔÊ¾¡£
-// Éè¼Æ£ºĞí½£Î°,ÓÚÆÎÌï,2010.12
 //==========================================================================
 sbit lcd_RS = P0^6; //Êı¾İÃüÁî¿ØÖÆÎ»,0ÃüÁî1Êı¾İ
 sbit lcd_RW = P0^5; //¶ÁĞ´Î»,0Ğ´1¶Á
@@ -92,13 +26,11 @@ code char *feqc[3]  = {"100Hz"," 1KHz" ,"7.8KH"};
 code char *zero[2]  = {"Open zero......","Short zero...OK."};
 char binLian=0,ATA=0,ATB=0,ATD=0;
 char OX[8]={0,0,0,0,0,0,8,0};
-int DDS3=1, c3 = 0,c4 = 0; 
+int c3 = 0,c4 = 0; 
 xdata char isQ=1,REL=0;
 xdata uchar menu=1,menu2=0; //²Ëµ¥±äÁ¿
 xdata float TR,TX; //ÇåÁãÊı¾İ
 xdata float RELDAT; //Ïà¶Ô²âÁ¿Êı¾İ
-uint ph=0, phM=256, feq=977; //ÏàÎ»,phMÏàÎ»²½½øÖµ
-
 
 
 void lcd_delay(int n){ //LCD×¨ÓÃÑÓÊ±º¯Êı
@@ -142,7 +74,6 @@ void lcd_init(){ //LCD1602 ³õÊ¼»¯
   lcd_B(0, 0x80, 5); //RAMÖ¸Õë¶¨Î»
   lcd_B(0, 0x01, 5); //Æô¶¯ÇåÆÁÃü³õÊ¼»¯LCD
 }
-//==========================================================================
 //=========================¼¸¸ö¹¦ÄÜ³£ÓÃº¯Êı=================================
 void lcd_cls()         { lcd_B(0, 0x01+0, 2);  } //ÇåÆÁ
 void lcd_cur0()        { lcd_B(0, 0x0C+0, 0);  } //Òş²Ø¹â±ê
@@ -153,7 +84,7 @@ void lcd_puts(uchar *s){ for(; *s; s++) lcd_B(1,*s,0); } //×Ö´®Êä³ö
 //==============×Ö·ûÏÔÊ¾º¯Êı====================
 
 void lcd_putp(float a,float b,char bo,char n, float qmin){ //´øµ¥Î»ÏÔÊ¾¸´Êı,nÊÇµ¥Î»ÏÂÏŞ,qminÊÇ×îĞ¡Î»È¨Öµ(ÓÃÓÚÏŞ¶¨ÓĞĞ§Êı×Ö)
-  code uchar dwB[] = {'p','n',1,'m',0,'k','M','G'}; //µ¥Î»±í
+  code uchar resistorB[] = {'p','n',1,'m',0,'k','M','G'}; //µ¥Î»±í
   char i,j, c=0,digW=4, h=3, fh[2]={' ','+'};
   long d,q,qm,Q=1; //×î¸ßÎ»È¨
   float f,g=1,k=1;
@@ -167,10 +98,10 @@ void lcd_putp(float a,float b,char bo,char n, float qmin){ //´øµ¥Î»ÏÔÊ¾¸´Êı,nÊÇµ
   if ((n==1)&&(c==-1)){
   digW=2;                 //ÒÆ¶¯1Î»Ğ¡Êıµã
   }else if ((n==2)&&(c==-2)){
-  if(feq!=7813) {digW=2;   //ÒÆ¶¯1Î»Ğ¡Êıµã
+  if(frqB[Frq_idx]!=7813) {digW=2;   //ÒÆ¶¯1Î»Ğ¡Êıµã
   }else{ digW=3; }         //ÒÆ¶¯2Î»Ğ¡Êıµã
   }else if ((n==4)&&(c==-4)){
-  if(feq!=7813) {digW=2;   //ÒÆ¶¯1Î»Ğ¡Êıµã
+  if(frqB[Frq_idx]!=7813) {digW=2;   //ÒÆ¶¯1Î»Ğ¡Êıµã
   }else{ digW=3; }         //ÒÆ¶¯2Î»Ğ¡Êıµã
   }
   for(i=1;i<digW && f*g<k*Q;i++) g*=10,h--;           //¼ÌĞøÒÆ¶¯Ğ¡Êıµã£¬Ê¹Ö®Âú×Ö
@@ -195,8 +126,8 @@ void lcd_putp(float a,float b,char bo,char n, float qmin){ //´øµ¥Î»ÏÔÊ¾¸´Êı,nÊÇµ
    }
    if(!bo||bo==2) break;     //²»ÏÔÊ¾Ğé²¿
   }
-  if((n!=1)&&(dwB[c+4]==0))lcd_putc(' '); else lcd_putc(dwB[c+4]);//µ¥Î»
-  if((n==1)&&(dwB[c+4]==0)) OX[6]=32; else OX[6]=8; //×Ô¶¯µ¥Î»
+  if((n!=1)&&(resistorB[c+4]==0))lcd_putc(' '); else lcd_putc(resistorB[c+4]);//µ¥Î»
+  if((n==1)&&(resistorB[c+4]==0)) OX[6]=32; else OX[6]=8; //×Ô¶¯µ¥Î»
 }
 
 void lcd_putf(float a, char n, float qmin) //´øµ¥Î»ÏÔÊ¾¸¡µãÊı,nÊÇµ¥Î»ÏÂÏŞ
@@ -212,23 +143,13 @@ void lcd_int(int a,char w){ //¶¨¿íÏÔÊ¾ÕıÕûÊı
   for(;w;w--) lcd_putc(s[w-1]);
 }
 
-//==========================================================================
 //===============================ÑÓÊ±º¯Êı===================================
 void delay(uint loop) { uint i; for(i=0;i<loop;i++); } //ÑÓÊ±º¯Êı
 void delay2(uint k)   { for(;k>0;k--) delay(10000);  } //³¤ÑÓÊ±,k=100´óÔ¼¶ÔÓ¦1Ãë
 
-//==========================================================================
-//=================================AD×ª»»===================================
-sfr P1ASF = 0x9D;     //½«P1ÖÃÎªÄ£Äâ¿Ú¼Ä´æÆ÷(Ê¹ÄÜ),¸÷Î»ÖĞÎª1µÄÓĞĞ§
-sfr ADC_CONTR = 0xBC; //A/D×ª»»¿ØÖÆ¼Ä´æÆ÷
-sfr ADC_res   = 0xBD; //A/D×ª»»½á¹û¼Ä´æÆ÷
-sfr ADC_resl  = 0xBE; //A/D×ª»»½á¹û¼Ä´æÆ÷
 
-void set_channel(char channel){
- P1ASF = 1<<channel;
- ADC_CONTR = channel+128; //×î¸ßÎ»ÊÇµçÔ´¿ª¹Ø,µÍ3Î»Í¨µÀÑ¡Ôñ
- delay(1); //Ê×´Î´ò¿ªµçÔ´Ó¦ÑÓ³Ù£¬Ê¹ÊäÈëÎÈ¶¨
-}
+//=================================AD×ª»»===================================
+
 uint getAD2(){
  ADC_CONTR |= 0x08;             //00001000,ÖÃADC_START=1Æô¶¯A/D ×ª»»
  while ( !(ADC_CONTR & 0x10) ); //µÈ´ıA/D×ª»»½áÊø(ADC_FLAG==0)
@@ -236,16 +157,7 @@ uint getAD2(){
  return ADC_res*4 + ADC_resl;
 }
 
-
-
-//==========================================================================
 //==================================EEPROWÆ«³Ì==============================
-sfr IAP_data  = 0xC2;
-sfr IAP_addrH = 0xC3;
-sfr IAP_addrL = 0xC4;
-sfr IAP_cmd   = 0xC5;
-sfr IAP_trig  = 0xC6;
-sfr IAP_contr = 0xC7;
 /********************
 Ğ´×Ö½ÚÊ±£¬¿ÉÒÔ½«Ô­ÓĞÊı¾İÖĞµÄ1¸ÄÎª0£¬ÎŞ·¨½«0¸ÄÎª1£¬Ö»ÄÜÊ¹ÓÃ²Á³ıÃüÁî½«0¸ÄÎª1
 Ó¦×¢Òâ£¬²Á³ıÃüÁî»á½«Õû¸öÉÈÇø²Á³ı
@@ -286,23 +198,6 @@ void eraseEEP(uint k){ //²Á³ı
 
 
 
-xdata struct Ida{
- char zo[3];//Èı¸öÆµÂÊÏÂµÄÁãµã¸ÄÕıÖµ
- char j1;   //ÏàÎ»²¹³¥(3±¶µµ)
- char j2;   //ÏàÎ»²¹³¥(10±¶µµ)
- char J[4];  //ÏàÎ»²¹³¥(V/I±ä»»Æ÷)
- char R[4]; //ÏÂ±Ûµç×èĞŞÕı(40,1k,10k,100k)
- char g1;   //ÔöÒæĞŞÕı(3±¶µµ)
- char g2;   //ÔöÒæĞŞÕı(10±¶µµ)
- char phx; //1kHzÒÔÏÂÏàÎ»¸ÄÕı
- char R4b; //100kµµ7.8kHzÆµÂÊÏÂµÄ·ù¶È²¹³¥
- char G2b; //9±¶µµ7.8kHzÆµÂÊÏÂµÄ·ù¶È²¹³¥
- char feq; //ÆµÂÊĞŞÕı
- char ak;  //ADĞ±ÂÊĞŞÕı
- float QRs[3],QXs[3]; //¶ÌÂ·ÇåÁãÊı¾İ
- float QRo[3],QXo[3]; //¿ªÂ·ÇåÁãÊı¾İ
-} cs;
-
 void cs_RW(char rw){
  uchar i,*p = &cs;
  const int offs=512;
@@ -317,128 +212,15 @@ void cs_RW(char rw){
 
 //==========================================================================
 //==================================LCRÖ÷³ÌĞò===============================
-//==========================================================================
-sfr P1M1=0x91; //P1¶Ë¿ÚÉèÖÃ¼Ä´æÆ÷
-sfr P1M0=0x92; //P1¶Ë¿ÚÉèÖÃ¼Ä´æÆ÷
-sfr P0M1=0x93; //P0¶Ë¿ÚÉèÖÃ¼Ä´æÆ÷
-sfr P0M0=0x94; //P0¶Ë¿ÚÉèÖÃ¼Ä´æÆ÷
-sfr P2M1=0x95; //P2¶Ë¿ÚÉèÖÃ¼Ä´æÆ÷
-sfr P2M0=0x96; //P2¶Ë¿ÚÉèÖÃ¼Ä´æÆ÷
-sfr P3M1=0xB1; //P3¶Ë¿ÚÉèÖÃ¼Ä´æÆ÷
-sfr P3M0=0xB2; //P3¶Ë¿ÚÉèÖÃ¼Ä´æÆ÷
-
-
-sbit spk=P2^3; //·äÃùÆ÷
-sbit Kb=P2^1;  //Á¿³Ì¿ª¹ØB
-sbit Ka=P2^2;  //Á¿³Ì¿ª¹ØA
-sbit DDS2=P1^2;//ÒÆÏà·½²¨Êä³ö¿Ú
-sbit K3=P1^7;
-sbit K4=P1^6;
-sbit K5=P1^5;  //7.8kHzÂË²¨¿ª¹Ø
-sbit K6=P1^4;
-sbit K8=P2^0;  //100HzÂË²¨¿ª¹Ø
-sbit K32=P1^1; //32kHz·¢ÉúÆ÷
-
 
 //==============µÍÆµĞÅºÅDDSÏà¹Ø²ÎÊı====================
-//PCAÏà¹Ø¼Ä´æÆ÷
-sfr CMOD = 0xD9;   //ÖÓÔ´Ñ¡Ôñ¿ØÖÆµÈ
-sfr CH = 0xF9;     //PCAµÄ¼ÆÊıÆ÷
-sfr CL = 0xE9;     //PCAµÄ¼ÆÊıÆ÷
-sfr CCON = 0xD8;   //PCA¿ØÖÆ¼Ä´æÆ÷
-sfr CCPAM0 = 0xDA; //PCAÄ£¿é0¹¤×÷Ä£Ê½¼Ä´æÆ÷
-sfr CCPAM1 = 0xDB; //PCAÄ£¿é1¹¤×÷Ä£Ê½¼Ä´æÆ÷
-sfr CCAP0L = 0xEA; //Ä£¿é0²¶»ñ¼Ä´æÆ÷µÍÎ»
-sfr CCAP0H = 0xFA; //Ä£¿é0²¶»ñ¼Ä´æÆ÷¸ßÎ»
-sfr IPH = 0xB7;
-
-sbit PPCA  = IP^7;   //PCAµÄÖĞ¶ÏÓÅÏÈ¼¶ÉèÖÃ
-sbit CCF0  = CCON^0; //PCAµÄÄ£¿é0ÖĞ¶Ï±êÖ¾
-sbit CCF1  = CCON^1; //PCAµÄÄ£¿é1ÖĞ¶Ï±êÖ¾
-sbit CR = CCON^6;    //PCA¼ÆÊıÆ÷Ê¹ÄÜ
-
-
-uchar *ph8 = (char*)&ph;    //phµÄ¸ß8Î»µØÖ·
-xdata float feqX=976.6; //Êµ¼ÊÊä³öÆµÂÊ
-uchar code sinB[256]={
- //²éÑ¯±íÖĞ²»¿É×°ÔØÁãÖµ£¬·ñÔò»áÔì³ÉÎŞÖĞ¶Ï²úÉú
- 255,255,255,255,255,255,254,254,253,252,252,251,250,249,248,247,246,245,243,242,240,239,237,236,234,232,230,229,227,225,222,220,
- 218,216,214,211,209,206,204,201,199,196,194,191,188,185,183,180,177,174,171,168,165,162,159,156,153,150,147,144,140,137,134,131,
- 128,125,122,119,116,112,109,106,103,100, 97, 94, 91, 88, 85, 82, 79, 76, 73, 71, 68, 65, 62, 60, 57, 55, 52, 50, 47, 45, 42, 40,
-  38, 36, 34, 31, 29, 27, 26, 24, 22, 20, 19, 17, 16, 14, 13, 11, 10,  9,  8,  7,  6,  5,  4,  4,  3,  2,  2,  1,  1,  1,  1,  1,
-   1,  1,  1,  1,  1,  1,  2,  2,  3,  4,  4,  5,  6,  7,  8,  9, 10, 11, 13, 14, 16, 17, 19, 20, 22, 24, 26, 27, 29, 31, 34, 36,
-  38, 40, 42, 45, 47, 50, 52, 55, 57, 60, 62, 65, 68, 71, 73, 76, 79, 82, 85, 88, 91, 94, 97,100,103,106,109,112,116,119,122,125,
- 128,131,134,137,140,144,147,150,153,156,159,162,165,168,171,174,177,180,183,185,188,191,194,196,199,201,204,206,209,211,214,216,
- 218,220,222,225,227,229,230,232,234,236,237,239,240,242,243,245,246,247,248,249,250,251,252,252,253,254,254,255,255,255,255,255
-};
-uchar code fbB[256]={ //·½²¨DDS²éÑ¯±í
-0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
-uchar chuX=0; //·½²¨DDS³õÏà
-//==============µÍÆµĞÅºÅDDSº¯Êı====================
-void PWM_init(){ //°ÑPCAÖÃÎªPWM
-  CMOD = 2;   //0000 0010 ¼ÆÊıÔ´Ñ¡Ôñ,ÖÓÔ´È¡fosc/2
-  CL = CH = 0;
-  CCAP0L = CCAP0H = 192; //Õ¼¿Õ±ÈÎª25%
-  //CCPAM0=0x42;//0100 0010,PCAµÄÄ£¿é0ÉèÖÃÎªPWMÄ£Ê½,ÎŞÖĞ¶Ï
-  CCPAM0=0x53;//0101 0011,PCAµÄÄ£¿é0ÉèÖÃÎªPWMÄ£Ê½,ÓĞÖĞ¶Ï£¬ÏÂ½µÑØÖĞ¶Ï
-  PPCA = 1;   //ÓÅÏÈÖĞ¶Ï
-  IPH |= 128;
-  //CR = 1;   //¿ªÊ¼¼ÆÊı
-  EA = 1;     //¿ª×ÜÖĞ¶Ï
-}
-
-void PCAinter(void) interrupt 7 {//PCAÖĞ¶Ï
-  uchar x,y;
-  CCF0=0; //Çå³ıÖĞ¶ÏÇëÇó,ÒÔÃâ·´¸´ÖĞ¶Ï
-  x = *ph8;        //½Ø¶ÏÕıÏÒÏàÎ»ÀÛ¼ÓÆ÷,È¡¸ß8Î»
-  y = x + chuX;    //·½²¨ÏàÎ»
-  CCAP0H = sinB[x];//ÕıÏÒDDSÊä³ö
- if(DDS3) {  DDS2 = fbB[y];   //·½²¨DDSÊä³ö
-}else {DDS2 = 0;}
-  ph += phM;       //ÏàÎ»ÀÛ¼Ó
-  K32 = ~K32;
-}
-void setDDS(uint f){ //²Î¿¼Ê±ÖÓÊÇc=(fosc/2)/256=32000000/2/256=62500,ÆµÂÊf=c*phM/2^16
- feq = f;
- phM=f*65536.0/62500; //phM=f*2^16/62500
- feqX = 62500.0*phM/65536*(1+cs.feq/10000.0); //Êµ¼ÊÊä³öÆµÂÊ
- ph = 0;              //¸ßÆµÊ±£¬Ê¹²¨ĞÎ¶Ô³Æ
- if(!f) CR=0; else CR=1;
-}
 
 //ÏàÎ»¿ØÖÆº¯Êı
-xdata char xw=0; //ÏàÎ»
-void set90(char k){ //ÉèÖÃ·½²¨µÄÏàÎ»²î
-  k %= 4;
-  if(k<0) k += 4;
-  chuX = k*64;   //ÒÆÏà0~270¶È
-  xw = k;
-}
 void set902() { set90(xw+1); } //ÏàÎ»²½½ø
-
 //==============Á¿³Ì¿ØÖÆº¯Êı====================
-xdata char Rang=1; //Á¿³Ì
-void setRng(char k){//ÇĞ»»Á¿³Ì
- if(k>3) k=3;
- if(k<0) k=0;
- Ka = k & 2, Kb = k & 1;  //40Å·--100kÅ·
- Rang = k;
-}
-void setRng2(){ setRng( (Rang+1)%4); } //Á¿³Ì²½½ø
-
+void setRng2(){ setRng( (Rang_idx+1)%4); } //Á¿³Ì²½½ø
 //==============ÔöÒæ¿ØÖÆº¯Êı====================
-char curGain=1; //µ±Ç°ÔöÒæË÷ÒıºÅ
-void setGain(char k){ //ÉèÖÃµçÂ·ÔöÒæ
-  if(k>3) k=3;
-  if(k<0) k=0;
-  K4 = k & 2, K6 = k & 1; //1±¶--27±¶
-  curGain = k;
-}
-void setGain2(){ setGain((curGain+1)%4); }
-
+void setGain2(){ setGain((Gain_idx+1)%4); }
 
 //==============AD·ÇÏßĞÔ¸ÄÕıÓë¹ı²ÉÑù=================
 uint getAD10(){ //250´Î²ÉÑù,ÓÃreentrantÉêÃ÷£¬ÓĞµÄµ¥Æ¬»úÎŞ·¨ÔËĞĞ
@@ -466,31 +248,16 @@ uint getAD10b(){ //250´Î²ÉÑù,ÓÃreentrantÉêÃ÷£¬ÓĞµÄµ¥Æ¬»úÎŞ·¨ÔËĞĞ
 
 
 //==============LCR²âÁ¿====================
-code float ga[4] =  {  1,   3,   9,  27 }; //ÔöÒæ±í
-code float dwR[4] = { 40, 1e3, 1e4, 1e5 }; //¸÷µµµç×è±í
-xdata int Vxy[12]={0,0,0,0,1,1}; //Vxy[Vx1,Vy1,Vx2,Vy2,g1,g2]
 xdata char Sxw[4]={0,1,0,1};    //±£´æÕıÈ·ÏàÎ»
 xdata int Vz[24];               //LCR²âÁ¿½á¹û¶Ó
-xdata uchar tim=0,tims=0;
 xdata char pau=0; //ÔİÍ£×ø±ê×Ô¶¯Ğı×ª
 
 
 #define Vfull 9600
 #define gad (9600/30)
-uchar mT = 6; //²âÁ¿ËÙ¶È,mTÈ¡ÖµÎª6»ò12»ò24Ê±£¬¿ÉÒÔÏû³ıÊı×ÖÔëÉù£¬Î²Êı²»¶¯£¬µ«²»ÀûÓÚÓÚÈ¡Æ½¾ù
+
 //==============ÉèÖÃÆµÂÊ====================
-xdata char feqK=1; //ÆµÂÊË÷ÒıºÅ
-void setF(char k){
-  if(k==-1) k = (feqK+1)%3; //²½½ø
-  feqK = k;
-  if(k==0) { setDDS(100);   K5=0; K8=1; mT=12; } //ÖÃÎª100Hz
-  if(k==1) { setDDS(977);   K5=0; K8=0; mT=6;  } //ÖÃÎª1kHz
-  if(k==2) { setDDS(7813);  K5=1; K8=0; mT=6;  } //ÖÃÎª7.8125kHz
-  TH1 = 150, TL1 = 171; //ÖÃÎª20ms
-  tims = 0;
-  tim = 0;
-  ph = 0;
-}
+
 int absMax(int a,int b){ //È¡Á½¸öÊı¾ø¶ÔÖµ×î´óÕß
   if(a<0) a = -a;
   if(b<0) b = -b;
@@ -501,6 +268,7 @@ int absMax(int a,int b){ //È¡Á½¸öÊı¾ø¶ÔÖµ×î´óÕß
 char yc1=0,yc2=0; //Òç³ö±êÊ¶
 char slw = 1; //½µËÙ±¶ÂÊ
 char chg=0;   //Á¿³ÌÇĞ»»±ê¼Ç
+
 void timerInter1(void) interrupt 3 {//T1ÖĞ¶Ï,LCRÊı¾İ²É¼¯
  code int y[5]={0,-15,30,24,0}; //Âú¶ÈÓÃ30
  code int x[5]={4900,5090,5140,5500,6120};
@@ -513,7 +281,7 @@ void timerInter1(void) interrupt 3 {//T1ÖĞ¶Ï,LCRÊı¾İ²É¼¯
   c = getAD10b();   //¶ÁÈ¡µçÑ¹Öµ
   c4= c;
   cc= c3;
-  c -= cs.zo[feqK];
+  c -= cs.zo[Frq_idx];
 if(cs.ak!=0){
  for(i=0;i<4;i++){ //·ÇÏßĞÔ¸ÄÕı
   if(c<x[i]||c>=x[i+1]) continue;
@@ -524,22 +292,22 @@ if(cs.ak!=0){
   
   Vxy[tim] = xw<2 ? c : -c;  //±£´æµ±Ç°µçÑ¹
   Vxy[tim+6] = xw<2 ? cc : -cc;  //±£´æµ±Ç°µçÑ¹
-  Vxy[tim/2+4] = curGain;    //±£´æµ±Ç°ÔöÒæ
+  Vxy[tim/2+4] = Gain_idx;    //±£´æµ±Ç°ÔöÒæ
   Sxw[tim] = ( Sxw[tim]+(c<0 ? 2 : 0) )%4;  //ÏàÎ»·­×ª(Ô¤²âÏÂ´ÎµÄÏàÎ»²ÉÓÃÖµ)
   if(tim==1||tim==3){ //ÉÏÏÂ±ÛÇĞ»»
     if(tim==1) { K3=1, c = absMax(Vxy[2],Vxy[3]), g=Vxy[5]; yc2 = c>Vfull ? 1:0; }//ÇĞ»»µ½ÏÂ±Û
     if(tim==3) { K3=0, c = absMax(Vxy[0],Vxy[1]), g=Vxy[4]; yc1 = c>Vfull ? 1:0; }//ÇĞ»»µ½ÉÏ±Û
-    gb=g, Rb=Rang;
-    if(c>Vfull){ if(g==0&&Rang>0&&K3&&isQ) Rb=Rang-1; gb=0; }
+    gb=g, Rb=Rang_idx;
+    if(c>Vfull){ if(g==0&&Rang_idx>0&&K3&&isQ) Rb=Rang_idx-1; gb=0; }
     else if(c<gad*1 ) gb = g+3; //Ôö¼Ó27±¶
-    else if(c<gad*3 ){ gb = g+2;if(c<gad*2&&Rang>=1&&Rang<=2&&K3&&isQ ) { gb=0; Rb=Rang+1; }} //Ôö¼Ó9±¶
+    else if(c<gad*3 ){ gb = g+2;if(c<gad*2&&Rang_idx>=1&&Rang_idx<=2&&K3&&isQ ) { gb=0; Rb=Rang_idx+1; }} //Ôö¼Ó9±¶
     else if(c<gad*9)  gb = g+1; //Ôö¼Ó3±¶
 	if(gb>3) gb = 3;
-    if(g==3&&Rang<3&&K3&&isQ) { gb=0; Rb=Rang+1; }
-    if(g==0&&c<gad*1&&Rang<3&&K3&&isQ) { gb=0; Rb=Rang+1; }
+    if(g==3&&Rang_idx<3&&K3&&isQ) { gb=0; Rb=Rang_idx+1; }
+    if(g==0&&c<gad*1&&Rang_idx<3&&K3&&isQ) { gb=0; Rb=Rang_idx+1; }
 
 	setRng(Rb); setGain(gb); //ÖÃÁ¿³Ì
-    if(gb!=g || Rb!=Rang) slw = 2, chg++; //Á¿³ÌÕıÔÚ¸Ä±ä£¬Ôò¼ÓËÙ²âÁ¿
+    if(gb!=g || Rb!=Rang_idx) slw = 2, chg++; //Á¿³ÌÕıÔÚ¸Ä±ä£¬Ôò¼ÓËÙ²âÁ¿
     if(tim==3){ if(!chg) slw=1; chg=0; }
   }
   set90( Sxw[ (tim+1)%4 ] ); //ÏàÎ»Ğı×ª
@@ -549,7 +317,7 @@ if(cs.ak!=0){
 
 void showR(char binLian, char showk){ //ÏÔÊ¾LCR
   xdata float a=0,b=0,c=0,qq=0,dd=0,e,w,L,C;
-  xdata int gr=cs.R[Rang], g1=cs.g1, g2=cs.g2;
+  xdata int gr=cs.R[Rang_idx], g1=cs.g1, g2=cs.g2;
   xdata int g12 = g1 + g2;          //ÔöÒæ×î´ó²¹³¥
   xdata int j12 = (int)cs.j1+cs.j2; //ÏàÎ»×î´ó²¹³¥
   xdata float RELOUT;
@@ -559,35 +327,35 @@ void showR(char binLian, char showk){ //ÏÔÊ¾LCR
   xdata char ATC=0,ATE=0,d2=0,d3=1;
   xdata float LCR[3];
   //LCR¼ÆËã
-  if(feqK<0||feqK>2) return;
-  if(feq==7813&&Rang==3) gr += cs.R4b; //7.8kHzÊ±ÏÂ±ÛĞŞÕıÁ¿
+  if(Frq_idx<0||Frq_idx>2) return;
+  if(frqB[Frq_idx]==7813&&Rang_idx==3) gr += cs.R4b; //7.8kHzÊ±ÏÂ±ÛĞŞÕıÁ¿
   //¿É¿ØÔöÒæµ¥ÔªµÄÔöÒæĞŞÕı¡¢ÏàÎ»²¹³¥Á¿
-  if(feq==7813) g2 += cs.G2b;  //7.8kHzÊ±9±¶µµĞŞÕıÁ¿
+  if(frqB[Frq_idx]==7813) g2 += cs.G2b;  //7.8kHzÊ±9±¶µµĞŞÕıÁ¿
   if(Vz[4] == 1) JD += cs.j1,  G += g1;
   if(Vz[4] == 2) JD += cs.j2,  G += g2;
   if(Vz[4] == 3) JD += j12,    G += g12;
   if(Vz[5] == 1) JD -= cs.j1,  G -= g1;
   if(Vz[5] == 2) JD -= cs.j2,  G -= g2;
   if(Vz[5] == 3) JD -= j12,    G -= g12;
-  JD = (JD - cs.J[Rang]) * feqX/7813/2000;
-  if(feq==977) JD -= cs.phx/2000.0;
+  JD = (JD - cs.J[Rang_idx]) * Actual_Frq/7813/2000;
+  if(frqB[Frq_idx]==977) JD -= cs.phx/2000.0;
   cJD = 1 - JD*JD/2;
   v[0] = Vz[0]+Vz[12]+(Vz[6]+Vz[18])/25.0;
   v[1] = Vz[1]+Vz[13]+(Vz[7]+Vz[19])/25.0;
   v[2] = Vz[2]+Vz[14]+(Vz[8]+Vz[20])/25.0;
   v[3] = Vz[3]+Vz[15]+(Vz[9]+Vz[21])/25.0;
-  a = (+( 1.0*v[2]*v[2] + 1.0*v[3]*v[3] )*((ga[Vz[4]] / ga[Vz[5]]) /(dwR[Rang]*(1+gr/10000.0))))+(+( 1.0*v[2]*v[2] + 1.0*v[3]*v[3] )*((ga[Vz[4]] / ga[Vz[5]]) /(dwR[Rang]*(1+gr/10000.0))))*G/10000;  //ÔöÒæ²¹³¥
+  a = (+( 1.0*v[2]*v[2] + 1.0*v[3]*v[3] )*((gainB[Vz[4]] / gainB[Vz[5]]) /(resistorR[Rang_idx]*(1+gr/10000.0))))+(+( 1.0*v[2]*v[2] + 1.0*v[3]*v[3] )*((gainB[Vz[4]] / gainB[Vz[5]]) /(resistorR[Rang_idx]*(1+gr/10000.0))))*G/10000;  //ÔöÒæ²¹³¥
   b = (-( 1.0*v[0]*v[2] + 1.0*v[1]*v[3] ))*cJD - (-( 1.0*v[2]*v[1] - 1.0*v[0]*v[3] ))*JD; //ÏàÎ»²¹³¥
   c = (-( 1.0*v[0]*v[2] + 1.0*v[1]*v[3] ))*JD + (-( 1.0*v[2]*v[1] - 1.0*v[0]*v[3] ))*cJD; //ÏàÎ»²¹³¥  
  if(showk){
-  w = 2*3.1415926*feqX;
+  w = 2*3.1415926*Actual_Frq;
   if((showk==5)||(showk==8)||(showk==10)||(showk==13)||(showk==15)||(showk==18)||(showk==19)){d3=0;}
 
   if((showk==1)||(showk==2)||(showk==3)){
   showk=0;
-  DDS2 = 0;
+  KFB = 0;
   lcd_puts("Z=");
-  lcd_putf(c4-cs.zo[feqK],0,0);
+  lcd_putf(c4-cs.zo[Frq_idx],0,0);
   return;
 }
   if(binLian){ //²¢Áª
@@ -631,11 +399,11 @@ void showR(char binLian, char showk){ //ÏÔÊ¾LCR
 }
 
   if(binLian==20){ //²âÁ¿¿ªÂ·²ĞÓàÖµ
-  if(Rang==3){
+  if(Rang_idx==3){
   a = (b*b+c*c)/a;
   TR += b/a, TX += c/a; //¿ªÂ·²ĞÓàµ¼¿¹
   }
-  if(Rang==0){
+  if(Rang_idx==0){
   TR += b/a, TX += c/a; //¶ÌÂ·²ĞÓà×è¿¹
   }
   return;
@@ -646,26 +414,26 @@ void showR(char binLian, char showk){ //ÏÔÊ¾LCR
     return;
   }
 
-  w = 2*3.1415926*feqX;
+  w = 2*3.1415926*Actual_Frq;
   if(isQ){ //×Ô¶¯ÊÖ¶¯
-  if(Rang==0){ 
-    b -= cs.QRs[feqK]*a, c -= cs.QXs[feqK]*a;//¶ÌÂ·ÇåÁã
+  if(Rang_idx==0){ 
+    b -= cs.QRs[Frq_idx]*a, c -= cs.QXs[Frq_idx]*a;//¶ÌÂ·ÇåÁã
   }
-  if(Rang>1){
+  if(Rang_idx>1){
     a = (b*b+c*c)/a;	
-    b -= cs.QRo[feqK]*a, c -= cs.QXo[feqK]*a; //¿ªÂ·ÇåÁã
+    b -= cs.QRo[Frq_idx]*a, c -= cs.QXo[Frq_idx]*a; //¿ªÂ·ÇåÁã
     a = (b*b+c*c)/a;
  }
 
   if(ATA!=0){
-  if(ATD==0) { if(Rang>1)ATE=1;else ATE=0;  } //ÖÃÎª100Hz
+  if(ATD==0) { if(Rang_idx>1)ATE=1;else ATE=0;  } //ÖÃÎª100Hz
   if(ATD==1) { ATE=1;  } //ÖÃÎª1kHz
   if(ATD==2) { ATE=0;  } //ÖÃÎª7.8125kHz
-  }else      { if(Rang>1)ATE=1;else ATE=0; } 
+  }else      { if(Rang_idx>1)ATE=1;else ATE=0; } 
 
-  if(feq==100)  LCR[0]=2e3,LCR[1]=2e-1,LCR[2]=2e7,d2=1;
-  if(feq==977)  LCR[0]=2e2,LCR[1]=2e-2,LCR[2]=2e7,d2=2;
-  if(feq==7813) LCR[0]=2e1,LCR[1]=2e-3,LCR[2]=2e6,d2=3;
+  if(frqB[Frq_idx]==100)  LCR[0]=2e3,LCR[1]=2e-1,LCR[2]=2e7,d2=1;
+  if(frqB[Frq_idx]==977)  LCR[0]=2e2,LCR[1]=2e-2,LCR[2]=2e7,d2=2;
+  if(frqB[Frq_idx]==7813) LCR[0]=2e1,LCR[1]=2e-3,LCR[2]=2e6,d2=3;
 
   if(ATE){ //²¢Áª
     e = (b*b+c*c)/a;
@@ -814,13 +582,13 @@ void showR(char binLian, char showk){ //ÏÔÊ¾LCR
   }else{
   if(ATE) lcd_puts(" P "); else lcd_puts(" S ");
 
-  if(feq==100)  lcd_putc('A');
-  if(feq==977)  lcd_putc('B');
-  if(feq==7813) lcd_putc('C');
-  lcd_putc(Rang+49); //ÏÔÊ¾Á¿³Ì
+  if(frqB[Frq_idx]==100)  lcd_putc('A');
+  if(frqB[Frq_idx]==977)  lcd_putc('B');
+  if(frqB[Frq_idx]==7813) lcd_putc('C');
+  lcd_putc(Rang_idx+49); //ÏÔÊ¾Á¿³Ì
 }
   lcd_goto2(11);
-  lcd_puts(feqc[feqK]);
+  lcd_puts(feqc[Frq_idx]);
   }else{
   //ÏÔÊ¾Á¿³ÌĞÅÏ¢
   lcd_goto1(0);
@@ -828,12 +596,12 @@ void showR(char binLian, char showk){ //ÏÔÊ¾LCR
   if(binLian) lcd_putc('p');  else lcd_putc('s'); //ÏÔÊ¾´®Áª²¢Áª
 
   lcd_goto2(0);     //ÏÔÊ¾ÆµÂÊ
-  if(feq==100)  lcd_putc('A');
-  if(feq==977)  lcd_putc('B');
-  if(feq==7813) lcd_putc('C');
-  lcd_putc(Rang+49); //ÏÔÊ¾Á¿³Ì
-  if(yc1&&Rang!=3)     { lcd_goto1(2); lcd_puts(" Overflow,high");lcd_goto2(2); lcd_puts("         ");} //Î´Öª¸ß×èÒç³ö
-  if(yc2&&Rang!=0)     { lcd_goto1(2); lcd_puts(" Overflow,low ");lcd_goto2(2); lcd_puts("         ");} //Î´ÖªµÍ×èÒç³ö
+  if(frqB[Frq_idx]==100)  lcd_putc('A');
+  if(frqB[Frq_idx]==977)  lcd_putc('B');
+  if(frqB[Frq_idx]==7813) lcd_putc('C');
+  lcd_putc(Rang_idx+49); //ÏÔÊ¾Á¿³Ì
+  if(yc1&&Rang_idx!=3)     { lcd_goto1(2); lcd_puts(" Overflow,high");lcd_goto2(2); lcd_puts("         ");} //Î´Öª¸ß×èÒç³ö
+  if(yc2&&Rang_idx!=0)     { lcd_goto1(2); lcd_puts(" Overflow,low ");lcd_goto2(2); lcd_puts("         ");} //Î´ÖªµÍ×èÒç³ö
   if(yc1||yc2){return; } //µÚ2ĞĞÇå¿Õ
 
   //µçÑ§Á¿ÏÔÊ¾  if(!a) { lcd_cls(); lcd_puts("DIV 0"); return; }
@@ -867,173 +635,6 @@ if(!b||c>999) c = 999;
 }
 
 
-uchar Mode = RUN;
-uchar Fun = FUN_R;
-uchar Trg;
-uchar Cont;
-
-uchar KeyRead(void)
-{
-   uchar ReadData = (KEY);
-   Trg = ReadData & (ReadData ^ Cont);
-   Cont = ReadData;
-}
-
-
-uint cnt_plus=0;
-
-void C_Done(uchar p)
-{
-  uchar i,s;
-  if (Mode == RUN)
-  {
-     if (p) {}
-     if (((Rang==3)||(Rang==0))&&(!p))
-        {
-	  lcd_cls();
-	  if(Rang==3){lcd_puts(zero[0]);}else{lcd_puts(zero[1]);}
-	  delay2(100);
-	  for(i=0;i<3;i++)
-	    {  lcd_goto2(2);
-	       if(feq==100) delay2(150);
-	       lcd_puts(feqc[feqK]);
-	       lcd_goto2(9);
-	       lcd_puts(" ");
-	       delay2(100);
-	       TR = 0, TX = 0; 
-	       for(s=0;s<4;s++)
-	           {
-		    lcd_goto2(9);
-		    lcd_putc(51-s);
-		    if(feq==100){delay2(150);}else{delay2(75);}
-		    showR(20,0);
-		   }   
-	       if(Rang==3){cs.QRo[feqK] = TR/4.0, cs.QXo[feqK] = TX/4.0;} //¿ªÂ·²ĞÓàµ¼¿¹
-	       if(Rang==0){cs.QRs[feqK] = TR/4.0, cs.QXs[feqK] = TX/4.0;} //¶ÌÂ·²ĞÓà×è¿¹
-	       setF(-1);
-	    }
-	  cs_RW(1);
-	  lcd_goto1(0);
-	  if(Rang==3){lcd_puts(zero[0]);}else{lcd_puts(zero[1]);}
-	  delay2(100);
-	}
-     REL=0;
-  }
-}
-
-void M_Done(uchar p)
-{
-   if (Mode==RUN)
-   {
-      if (p) {Fun=FUN_S;} else {Fun=(Fun+1)%4;}
-      if (Fun==FUN_S){Mode = SETUP;} else {Mode = RUN;}
-   }
-}
-
-void R_Done(uchar p)
-{
-   if (Mode==RUN)
-   {
-      if (p) {Rang=AUTO;} else {Rang=(Rang+1)%6;}
-      if (Rang==AUTO) {} else {setRng2();}
-   }
-}
-
-void X_Done(void)
-{
-  if (Mode==RUN) {binLian=(binLian+1)%2;}
-}
-
-uchar KeyProc(void)
-{
-_SS
- while(1)
- {
-   KeyRead();
-   WaitX(20);
-   KeyRead();
-   if (Trg&KEY_M) {M_Done(0);}
-   if (Trg&KEY_X) {X_Done();}
-   if (Trg&KEY_R) {R_Done(0);} //Á¿³Ì²½½ø
-   if (Trg&KEY_F) {setF(-1);} //ÉèÖÃÆµÂÊ
-   if (Trg&KEY_C) {C_Done(0);}
-   if (Cont&KEY_M)
-     {
-       cnt_plus++;
-       if (cnt_plus>100)  {cnt_plus=0;M_Done(1);}
-      } 
-   if (Cont&KEY_R)
-     {
-       cnt_plus++;
-       if (cnt_plus>100) {cnt_plus=0;R_Done(1);} 
-     }
-   if (Cont&KEY_C)
-     {
-       cnt_plus++;
-       if (cnt_plus>100) {cnt_plus=0;C_Done(1);}
-     }
-   if (!(Cont)){cnt_plus=0;}
-  }
-_EE
-}
-
-uchar DispProc(void)
-{
-_SS
-  while(1)
-  {
-    WaitX(100);
-    if (Mode == RUN)
-    {
-    }
-  }
-_EE
-}
-
-void Init()
-{
- TCON=0, TMOD=0x12; //½«T0ÖÃÎª×Ô¶¯ÖØ×°¶¨Ê±Æ÷£¬T1ÖÃÎª¶¨Ê±Æ÷
- TH1 = 0, TL1 = 0;
- TR1=1;  //T1¿ªÊ¼¼ÆÊı
- TR0=0;  //T0ÔİÍ£¼ÆÊı
- ET1=1;  //T1¿ªÖĞ¶Ï
- ET0=1;  //T1¿ªÖĞ¶Ï
- EA=1;   //¿ª×ÜÖĞ¶Ï
-
- set_channel(0); //ÉèÖÃAD×ª»»Í¨µÀ
- P2M0 = 0xFF;    //P2.01234567ÖÃÎªÍÆÃãÊä³ö
- P1M0 = 0xFE;    //P1.1234567ÖÃÎªÍÆ»»¿Ú
- P1M1 = 0x01;    //P1.0ÖÃÎª¸ß×è¿¹
- P2 = 0x0F;
-
-
- PWM_init(); //DDS³õÊ¼»¯
- set90(2);   //³õÊ¼ÉèÖÃÏàÎ»
- setRng(1);  //³õÊ¼ÉèÖÃÁ¿³Ì
- setGain(1); //³õÊ¼ÉèÖÃÔöÒæ
- setF(1);    //DDS³õÊ¼ÉèÖÃÎª1kHz	
-}
-
-
-void INTT1(void) interrupt 1 using 1
-{
-    TL0=0Xff;    //10ms ÖØ×°
-    TH0=0XDB;    //b7;    
-
-    UpdateTimers();
-}
-
-//main()
-//{ 
-  //  Init();
-    //while(1)
-     //{
-	//RunTask(KeyProc(),0);
-	//RunTask(DispProc(),0);
-     //}
-//}
-
-//void timerInter(void) interrupt 1 {}//T0ÖĞ¶Ï
 main(){
  uchar i=0,s=0,key=0;
  uchar dispN=0; //ÏÔÊ¾É¨ÃèË÷Òı
@@ -1130,7 +731,7 @@ main(){
     lcd_goto1(0);
     lcd_puts(" xw="); lcd_putc(xw+48);      //ÏàÎ»Ë÷ÒıºÅ
     lcd_puts(" K3="); lcd_putc(K3?49:48);   //K3×´Ì¬
-    lcd_puts(" Ga="); lcd_putc(curGain+48); //ÔöÒæË÷ÒıºÅ
+    lcd_puts(" Ga="); lcd_putc(Gain_idx+48); //ÔöÒæË÷ÒıºÅ
     lcd_goto2(0);
     if(nn%32==0) lcd_int(getAD10(),5);
     delay(10000);
@@ -1141,7 +742,7 @@ main(){
   if(menu==6){ //ÆµÂÊĞŞÕı
     if(key==1) cs.feq += 1; //X¼üÔö
     if(key==2) cs.feq -= 1; //R¼ü¼õ
-    if(key==3) { cs_RW(1); setF(feqK); } //L¼ü±£´æ
+    if(key==3) { cs_RW(1); setF(Frq_idx); } //L¼ü±£´æ
     if(OX[0]!=cs.feq){ lcd_cls();OX[0]=cs.feq;
     lcd_goto1(0); lcd_puts("Feq correct");
     lcd_goto2(0); lcd_putf(cs.feq,0,0);}
@@ -1186,7 +787,7 @@ main(){
     if(menu2<3) DDS3=0; else DDS3=1;
     if(key==1) *p += bc; //X¼üÔö
     if(key==2) *p -= bc; //R¼ü¼õ
-    if(key==3) { cs_RW(1); setF(feqK); } //L¼ü±£´æ
+    if(key==3) { cs_RW(1); setF(Frq_idx); } //L¼ü±£´æ
     if(key==4) *p = 0;   //C¼üÇå³ı
 	if(key==5) { if(menu2==0) menu2=18; else menu2--; mo=0; }
 	if(key==6) { if(menu2==18)menu2=0;  else menu2++; mo=0; }
@@ -1210,13 +811,13 @@ main(){
 	//ÏÔÊ¾
 	if(mo){
      OX[1]=3.1415;OX[2]=3.1415;
-	 if(feqD!=feqK) setF(feqD);
-	 if(rngD!=Rang)  setRng(rngD);
+	 if(feqD!=Frq_idx) setF(feqD);
+	 if(rngD!=Rang_idx)  setRng(rngD);
      if(menu2>=3&&menu2<=7) showR(0,0);
      else showR(1,0);
 	}else{
-	 if(feqD!=feqK) setF(feqD);
-	 if(rngD!=Rang)  setRng(rngD);
+	 if(feqD!=Frq_idx) setF(feqD);
+	 if(rngD!=Rang_idx)  setRng(rngD);
      if(menu2>=3&&menu2<=7) showR(0,menu2+1);
      else showR(1,menu2+1);
     if(OX[1]!=*p||OX[2]!=menu2){ OX[1]=*p;OX[2]=menu2;
