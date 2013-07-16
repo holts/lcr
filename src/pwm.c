@@ -43,11 +43,12 @@ unsigned char code fbB[256]={ //方波DDS查询表
 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
 
 extern  Frq_idx;
-unsigned int Sin_Phase=0;  //正弦相位累加值
+extern  Vxy_idx;
+extern  angleB[4];
+unsigned int Sin_Phase=0;     //正弦相位累加值
 xdata float Actual_Frq=976.6; //实际输出频率
 
 
-unsigned char chuX=0; //方波DDS初相
 xdata unsigned char xw=0; //相位
 xdata unsigned char tim=0,tims=0;
 int DDS3=1;
@@ -70,16 +71,15 @@ void PWM_init (void){
 /***********************************************************************
 Function : PCAinter interrupt
 Note     : PCA中断处理函数
-Updata   : 2013-06-18
 ***********************************************************************/
 void PCAinter(void) interrupt 7 
 {
   unsigned char x,y;
   CCF0=0;          //清除中断请求,以免反复中断
   x = Sin_Phase << 8 ;        //截断正弦相位累加器,取高8位
-  y = x + chuX;    //方波相位
-  CCAP0H = sinB[x];//正弦DDS输出
-  KFB = fbB[y];   //方波DDS输
+  y = x + angleB[Vxy_idx];    //方波相位
+  CCAP0H = sinB[x]; //正弦DDS输出
+  KFB = fbB[y];     //方波DDS输
   Sin_Phase += Step[Frq_idx];       //相位累加
   K32 = ~K32;
 }
@@ -92,19 +92,9 @@ Note     : 低频信号DDS函数
 void setDDS(unsigned char frqIndex){ 
  //Actual_Frq = frqB[frqIndex]*(1+cs.feq/10000.0);  //实际输出频率 加修正值
  Actual_Frq = frqB[frqIndex];
- Sin_Phase = 0;                                   //高频时，使波形对称
+ Sin_Phase = 0;                                     //高频时，使波形对称
 }    
 
-/***********************************************************************
-Function : set90
-Note     : 设置方波的相位差
-***********************************************************************/
-void set90(char k){ 
-  k %= 4;
-  if(k<0) k += 4;
-  chuX = k*64;   //移相0~270度
-  xw = k;
-}
 
 
 

@@ -1,18 +1,23 @@
 #ifndef   CONFIG_H 
 #define   CONFIG_H 
 
+#define CPU_FOSC        32000000  //系统时钟32MHz
+
+#define  READPointer          //连续读函数的指针指向数据类型（方便复制：idata，xdata，code，空:通用指针）
+#define  WRITEPointer         //连续写函数的指针指向数据类型（方便复制：idata，xdata，code，空:通用指针）
+
+#define VFULL           9600
+#define GAD             (9600/30)
 
 sfr WDT_CONTR = 0xC1;
 
-//==================================EEPROW偏程==============================
-sfr IAP_data  = 0xC2;
-sfr IAP_addrH = 0xC3;
-sfr IAP_addrL = 0xC4;
-sfr IAP_cmd   = 0xC5;
-sfr IAP_trig  = 0xC6;
-sfr IAP_contr = 0xC7;
-
-//==============低频信号DDS相关参数====================
+//====EEPROW偏程======================
+sfr ISP_DATA  = 0xC2;
+sfr ISP_ADDRH = 0xC3;
+sfr ISP_ADDRL = 0xC4;
+sfr ISP_CMD   = 0xC5;
+sfr ISP_TRIG  = 0xC6;
+sfr ISP_CONTR = 0xC7;
 
 
 /* 端口设置　*/
@@ -38,22 +43,22 @@ sbit K8 = P2^0;  //100Hz滤波开关
 
 
 //功能取值索引
-#define FUN_R		0	//电阻功能
-#define FUN_C		1	//电容功能
-#define FUN_L		2	//电感功能
-#define FUN_S		3	//长按功能键
+#define FUN_R		0  	  //电阻功能
+#define FUN_C		1	  //电容功能
+#define FUN_L		2	  //电感功能
+#define FUN_S		3	  //长按功能键
 
 //量程取值索引
-#define R40		0       //
-#define R1K		1       //
-#define R10K		2       //
-#define R100K		3       //
-#define AUTO		4	//长按功能键
+#define R40		0         //
+#define R1K		1         //
+#define R10K		2         //
+#define R100K		3         //
+#define AUTO		4	  //长按功能键
 
 //频率取值索引
-#define F100		0       //100HZ
-#define F1K		1       //1K
-#define F7K8		2       //7.8K
+#define F100		0         //100HZ
+#define F1K		1         //1K
+#define F7K8		2         //7.8K
                 
 //模式取值索引
 #define MODE_S          0       //串联模式
@@ -65,13 +70,13 @@ sbit K8 = P2^0;  //100Hz滤波开关
 #define GAIN3           1       //3倍
 #define GAIN9           2       //9倍
 #define GAIN27          3       //27倍
+#define GAIN_UP         4       //上臂增益
+#define GAIN_DOWN       5       //下臂增益
 
 //测量植索引
 #define VX_A            0       //上臂X分量
 #define VY_B            1       //上臂Y分量
 #define VX_C            2       //下臂X分量
 #define VY_D            3       //下臂Y分量
-#define GAIN_U          4       //上臂增益
-#define GAIN_D          5       //下臂增益
 
 #endif

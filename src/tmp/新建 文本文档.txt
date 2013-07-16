@@ -1,0 +1,147 @@
+  是的，你没有看错，我们要讨论的就是C语言而不是C++语言中类的封装。在展开知识点之前，我首先要
+重申两点：
+    1、面向对象是一种思想，基本与所用的语言是无关的。当你心怀面向对象，即便用QBasic也能写出符合
+       面向对象思想的代码，更不用说是C语言了。举一个反例来说，很多人初学C++的时候，并没有掌握
+       面向对象的思想，活生生把类当结构体来用的，也不在少数吧？
+    2、面向对象的最基本出发点是“将数据以及处理数据的方法封装在一起”。至于继承、派生、多态之类
+       则是后面扩展的东西。在C语言中，如果用结构体来保存数据，并将处理这些数据的函数与结构体的定
+       义封装在同一个.c文件中，则该.c文件就可以视作是一个类。如果将指向具体函数的函数指针与结构体
+       的其它成员变量封装在同一个结构体中，则该“对象”的使用甚至就与C++相差无几了。
+   
+    以上内容是面向对象C语言（Object-Oriented C Programming with ANSI-C）技术的基本出发点。作为引
+子，在使用OOC技术的时候，我们会遇到这么一个问题：是的，我们可以用结构体来模拟类，将所有的成员变
+量都放在结构体中，并将这一结构体放置在类模块的接口头文件中（xxxx.h），但问题是，结构体里面的成员
+变量都是public的，如何保护他们使其拥有private属性呢？解决的方法就是使用掩码结构体（Masked Structure）
+
+      那么，什么是掩码结构体呢？在回答这个问题之前，我们先看看下面这个例子。已知我们定义了一些用于
+在C语言里面进行类封装的宏，如下所示：
+
+
+
+    #define EXTERN_CLASS(__NAME,...) \
+        typedef union __NAME __NAME;\
+        __VA_ARGS__\
+        union __NAME {\
+            uint_fast8_t chMask[(sizeof(struct {
+
+    #define END_EXTERN_CLASS(__NAME) \
+            }) + sizeof(uint_fast8_t) - 1) / sizeof(uint_fast8_t)];\
+        };
+
+    #define DEF_CLASS(__NAME,...)\
+        typedef union __NAME __NAME;\
+        __VA_ARGS__\
+        typedef struct __##__NAME __##__NAME;\
+        struct __##__NAME{
+
+    #define END_DEF_CLASS(__NAME) \
+        };\
+        union __NAME {\
+            uint_fast8_t chMask[(sizeof(__##__NAME) + sizeof(uint_fast8_t) - 1) / sizeof(uint_fast8_t)];\
+        };
+
+    #define CLASS(__NAME)               __##__NAME
+
+复制代码
+假设我们要封装一个基于字节的队列类，不妨叫做Queue，因此我们建立了一个类文件queue.c
+和对应的接口头文件queue.h。假设我们约定queue.c将不包含queue.h（这么做的好处很多，在以后的
+内容里再讲解，当然对掩码结构体技术来说，模块的实现是否包含模块的接口头文件并不是关键）。
+
+我们首先想到的是要定义一个类来表示队列，它的一个可能的形式如下
+
+
+    //! \name byte queue
+    //! @{
+    typedef struct {
+        uint8_t *pchBuffer;    //!< queue buffer   
+        uint16_t hwBufferSize; //!< buffer size
+        uint16_t hwHead;       //!< head pointer
+        uint16_t hwTail;       //!< tail pointer
+        uint16_t hwCounter;    //!< byte counter
+    }queue_t;
+    //! @}
+
+复制代码
+目前为止，一切都还OK。由于queue.c并不包含queue.h，因此我们决定在两个文件中各放一个定义。由于.h
+中包含了队列的完整数据信息，使用该模块的人可能会因为种种原因直接访问甚至修改队列结构体中的数据
+——也许在这个例子中不是那么明显，但是在你某个其它应用模块的例子中，你放在结构体里面的某个信息
+可能对模块的使用者来说，直接操作更为便利，因此悲剧发生了——原本你假设“所有操作都应该由queue.c
+来完成的”格局被打破了，使用者可以轻而易举的修改和访问结构体的内容——而这些内容在面向对象思想中
+原本应该是私有的，无法访问的（private）。原本测试完好的系统，因为这种出乎意料的外界干涉而导致不稳
+定，甚至是直接crash了。当你气冲冲的找到这么“非法”访问你结构体的人时，对方居然推了推眼镜一脸无辜
+的看着你说“根据接口的最小信息公开原则，难道你放在头文件里面的信息不是大家放心可以用的么？”
+
+OTZ...哑口无言，然后你会隐约觉得太阳穴微微的在跳动……
+
+且慢，如果我们通过一开始提供的宏分别对queue.h和queue.c中的定义改写一番，也许就是另外一个局面了：
+
+queue.h
+    ...
+    //! \name byte queue
+    //! @{
+    EXTERN_CLASS(queue_t)
+        uint8_t *pchBuffer;    //!< queue buffer   
+        uint16_t hwBufferSize; //!< buffer size
+        uint16_t hwHead;       //!< head pointer
+        uint16_t hwTail;       //!< tail pointer
+        uint16_t hwCounter;    //!< byte counter
+    END_EXTERN_CLASS(queue_t)
+    //! @}
+    ...
+    extern bool queue_init(queue_t *ptQueue, uint8_t *pchBuffer, uint16_t hwSize);
+    extern bool enqueue(queue_t *ptQueue, uint8_t chByte);
+    extern bool dequeue(queue_t *ptQueue, uint8_t *pchByte);
+    extern bool is_queue_empty(queue_t *ptQueue);
+    ...
+
+复制代码
+queue.c
+
+    ...
+    //! \name byte queue
+    //! @{
+    DEF_CLASS(queue_t)
+        uint8_t *pchBuffer;    //!< queue buffer  
+        uint16_t hwBufferSize; //!< buffer size  
+        uint16_t hwHead;       //!< head pointer
+        uint16_t hwTail;       //!< tail pointer
+        uint16_t hwCounter;    //!< byte counter
+    END_DEF_CLASS(queue_t)
+    //! @}
+    ...
+
+复制代码
+对照前面的宏，我们实际上可以手工将上面的内容展开（这里就不再赘述了），可以看到，实际上类型queue_t
+是一个掩码结构体，里面只有一个起到掩码作用的数组chMask，其大小和真正后台的的类型__queue_t相同——
+这就是掩码结构体实现私有成员保护的秘密。解决了私有成员保护的问题，剩下还有一个问题，对于queue.c的
+函数来说queue_t只是一个数组，那么正常的功能要如何实现呢？下面的代码片断将为你解释一切：
+
+    ...
+    bool is_queue_empty(queue_t *ptQueue)
+    {
+        CLASS(queue_t) *ptQ = (CLASS(queue_t) *)ptQueue;
+        if (NULL == ptQueue) {
+            return true;
+        }
+        return ((ptQ->hwHead == ptQ->hwTail) && (0 == ptQ->Counter));
+    }
+    ...
+
+复制代码
+从编译器的角度来说，这种从queue_t到__queue_t类型指针的转义是逻辑上的，并不会因此产生额外的代码，
+简而言之，使用掩码结构体几乎是没有代价的——如果你找出了所谓的代价，一方面不妨告诉我，另一方面，
+不妨考虑这个代价和模块的封装相比是否是可以接受的。欢迎您的讨论。
+全文完
+
+
+2013-6-25 Update
+    更新了掩码结构体的宏，使其能够支持在类中使用指向自己的指针，同时也能插入 delegate 类型
+（事件处理函数原型）的声明。统一了格式。
+
+
+2013-5-10 Update
+    更新宏定义，解决了不同平台下CPU访问掩码结构体时可能存在的数组未对其到内核宽度的问题。
+所谓对齐到内核宽度是指，当用掩码结构体的类型声明静态变量时，8位机要对齐到Byte，16位机要
+对齐到Half-Word，32位机要对齐到Word。
+   该更新可以直接解决MSP430在IAR环境下无法正常使用掩码结构体的问题。关于uint_fast8_t的
+说明，请参照ANSI-C99关于stdint.h的描述

@@ -17,6 +17,7 @@ unsigned char Cont = 0;
 
 unsigned char cnt_plus=0;
 
+
 extern Fun_idx;
 extern Frq_idx; 
 extern Mode_idx;
@@ -102,11 +103,11 @@ unsigned char KeyProc(void)
    KeyRead();
    WaitX(20);
    KeyRead();
-   if (Trg&KEY_M) {M_Done(Fun_idx);}
-   if (Trg&KEY_X) {X_Done(Mode_idx);}
-   if (Trg&KEY_R) {setRng(0);} //量程步进
+   if (Trg&KEY_M) {M_Done(Fun_idx);}  //功能切换
+   if (Trg&KEY_X) {X_Done(Mode_idx);} //模式切换
+   if (Trg&KEY_R) {setRng(0);}        //量程步进
    if (Trg&KEY_F) {setFrq(Frq_idx);}  //设置频率
-   if (Trg&KEY_C) {C_Done(0);}
+   if (Trg&KEY_C) {C_Done(0);}        //清零
    if (Cont&KEY_M)
      {
        cnt_plus++;
@@ -125,6 +126,9 @@ unsigned char KeyProc(void)
    if (!(Cont)){cnt_plus=0;}
    _EE
 }
+
+
+
 
 
 
