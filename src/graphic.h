@@ -1,6 +1,5 @@
 /****************************************************
 
-	Í¼ÐÎ´¦Àí¿â
 
 ****************************************************/
 #include "dot.h"
@@ -9,12 +8,16 @@
 #define LCD_WIDTH	220
 #define LCD_HIGHT	176
 
+#define BLACK           0
+#define RED             1
+#define GREEN           2
+#define BLUE            3
+#define YELLOW          4
+
 #define	DrPoint(c) WriteDAT(color[c][0],color[c][1]) 
-#define	DrPoint(BACKCOLOR) WriteDAT(color[BACKCOLOR][0],color[BACKCOLOR][1]) 
+#define	DrPoint(BLACK) WriteDAT(color[BLACK][0],color[BLACK][1]) 
 
 unsigned char buf[100];
-
-unsigned char  BACKCOLOR=0;
 
 uc8 color[16][2]={
 {0x00,0x00},			//0-ºÚ

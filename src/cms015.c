@@ -49,11 +49,11 @@
 #define SET_WR 		sbi(LCDCTRLP4, LCD_WR)
 #define SET_RST         sbi(LCDCTRLP4, LCD_RST)
 
-#define CLR_RS		sbi(LCDCTRLP3, LCD_RS)
-#define CLR_CS          sbi(LCDCTRLP3, LCD_CS)
-#define CLR_RD 		sbi(LCDCTRLP4, LCD_RD)
-#define CLR_WR 		sbi(LCDCTRLP4, LCD_WR)
-#define CLR_RST         sbi(LCDCTRLP4, LCD_RST)
+#define CLR_RS		cbi(LCDCTRLP3, LCD_RS)
+#define CLR_CS          cbi(LCDCTRLP3, LCD_CS)
+#define CLR_RD 		cbi(LCDCTRLP4, LCD_RD)
+#define CLR_WR 		cbi(LCDCTRLP4, LCD_WR)
+#define CLR_RST         cbi(LCDCTRLP4, LCD_RST)
 
 
 void WriteCOM(unsigned char  b)
@@ -64,12 +64,12 @@ void WriteCOM(unsigned char  b)
 	CLR_CS;
 	SET_RD;
 	CLR_WR;
-	GPIO_ResetBits(DBIO, (0xff00));
+	cbi(LCDPORT, (0xff00));
 	SET_WR;
 
 	CLR_WR;
-	GPIO_SetBits(DBIO, ud & 0xff00);
-	GPIO_ResetBits(DBIO, (~ud & 0xff00));
+	sbi(LCDPORT, ud & 0xff00);
+	cbi(LCDPORT, (~ud & 0xff00));
 	SET_WR;
 	SET_RS;
 	SET_CS;
@@ -85,14 +85,14 @@ void WriteDAT(u8 a,u8 b) //写16位数据
 	SET_RD;
 
    	CLR_WR;
-	GPIO_SetBits(DBIO, ud & 0xff00);
-	GPIO_ResetBits(DBIO, (~ud & 0xff00));
+	sbi(LCDPORT, ud & 0xff00);
+	cbi(LCDPORT, (~ud & 0xff00));
 	SET_WR;
 
 	ud=b*256;
 	CLR_WR;
-	GPIO_SetBits(DBIO, ud & 0xff00);
-	GPIO_ResetBits(DBIO, (~ud & 0xff00));
+	sbi(LCDPORT, ud & 0xff00);
+	cbi(LCDPORT, (~ud & 0xff00));
 	SET_WR;
 
   	CLR_RS;
@@ -109,8 +109,8 @@ void WriteDAT8(unsigned char b)     //写8位数据
    	CLR_CS; 
 	SET_RD;
    
-	GPIO_SetBits(DBIO, ud & 0xff00);
-	GPIO_ResetBits(DBIO, (~ud & 0xff00));
+	sbi(LCDPORT, ud & 0xff00);
+	cbi(LCDPORT, (~ud & 0xff00));
 	CLR_WR;
 	SET_WR;
 
