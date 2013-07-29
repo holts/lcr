@@ -20,46 +20,46 @@
 *   背光正                   BLA VDD    16
 ***********************************************************************/
 
-#include <reg52.h>
+#include "config.h"
 #include "macros.h"
 #include "delay.h"
+
+//sfr  P4         =   0xc0;
+
+//定义端口
+
+/* LCD Read pin is assigned to Px4 of P4 */
+/* LCD Write pin is assigned to Px5 of P4 */
+/* LCD Reset pin is assigned to Px6 of P4 */
+
+/* LCD RS pin is assigned to Px7 of P3 */
+/* LCD RS pin is assigned to Px6 of P3 */
+sbit LCD_RD = P4^4;    
+sbit LCD_WR = P4^5;
+sbit LCD_RST = P4^6;
+sbit LCD_RS = P3^7;
+sbit LCD_CS = P3^6;
 
 /* LCDPort contains 8-bit data D0 to D7 */
 #define LCDPORT         P0
 
-/* Pins CS,RS,WR,RD,RST of LCD must be assigned to LCD Control Port*/
-#define LCDCTRLP4       P4
-#define LCDCTRLP3       P3
+#define SET_RS		LCD_RS=1
+#define SET_CS          LCD_CS=1
+#define SET_RD 		LCD_RD=1
+#define SET_WR 		LCD_WR=1
+#define SET_RST         LCD_RST=1
 
-/* LCD Read pin is assigned to Px4 of P4 */
-#define LCD_RD          4
-/* LCD Write pin is assigned to Px5 of P4 */
-#define LCD_WR          5
-/* LCD Reset pin is assigned to Px6 of P4 */
-#define LCD_RST         6
-
-/* LCD RS pin is assigned to Px7 of P3 */
-#define LCD_RS          7
-/* LCD RS pin is assigned to Px6 of P3 */
-#define LCD_CS          6
-
-#define SET_RS		sbi(LCDCTRLP3, LCD_RS)
-#define SET_CS          sbi(LCDCTRLP3, LCD_CS)
-#define SET_RD 		sbi(LCDCTRLP4, LCD_RD)
-#define SET_WR 		sbi(LCDCTRLP4, LCD_WR)
-#define SET_RST         sbi(LCDCTRLP4, LCD_RST)
-
-#define CLR_RS		cbi(LCDCTRLP3, LCD_RS)
-#define CLR_CS          cbi(LCDCTRLP3, LCD_CS)
-#define CLR_RD 		cbi(LCDCTRLP4, LCD_RD)
-#define CLR_WR 		cbi(LCDCTRLP4, LCD_WR)
-#define CLR_RST         cbi(LCDCTRLP4, LCD_RST)
+#define CLR_RS		LCD_RS=0
+#define CLR_CS          LCD_CS=0
+#define CLR_RD 		LCD_RD=0
+#define CLR_WR 		LCD_WR=0
+#define CLR_RST         LCD_RST=0
 
 
-void WriteCOM(unsigned char  b)
+void WriteCMD(unsigned char cmd_data)
 {
-	u16 ud;
-	ud=b*256;
+	unsigned int ud;
+	ud=cmd_data*256;
 	CLR_RS;
 	CLR_CS;
 	SET_RD;
@@ -75,9 +75,9 @@ void WriteCOM(unsigned char  b)
 	SET_CS;
 }
 
-void WriteDAT(u8 a,u8 b) //写16位数据
+void WriteDAT(unsigned char a,unsigned char b) //写16位数据
 {
-	u16 ud;
+	unsigned int ud;
 	ud=a*256;
 
    	SET_RS; 
@@ -102,7 +102,7 @@ void WriteDAT(u8 a,u8 b) //写16位数据
 
 void WriteDAT8(unsigned char b)     //写8位数据
 {
-	u16 ud;
+	unsigned int ud;
 	ud=b*256;
 
    	SET_RS; 
@@ -118,24 +118,24 @@ void WriteDAT8(unsigned char b)     //写8位数据
    	SET_CS;
 }
 
-void LCD_CMD(u16 cmd,u16 dat)
-{	u8 i,j;
+void LCD_CMD(unsigned int cmd,unsigned int dat)
+{	unsigned char i,j;
 	i=cmd &0xff;
-	WriteCOM(i);
+	WriteCMD(i);
 	i=dat>>8;
 	j=dat&0xff;
 	WriteDAT(i ,j);
 }
 
-void LCD_SetXY(u8 x,u8 y)
+void LCD_SetXY(unsigned char x,unsigned char y)
 {	x=219-x;
 	y=175-y;
 	LCD_CMD(0x0021,y+x*256);
-	WriteCOM(0x22);   
+	WriteCMD(0x22);   
 }
 
 void LCD_INIT()
-{  	u16 i;
+{  	unsigned int i;
 	SET_CS;
 	SET_RST;
 	DelayMs(200);
@@ -222,7 +222,7 @@ void LCD_INIT()
     	DelayMs(50); // Delay 50ms  
 
     	LCD_CMD(0x0021,0x0000);//RAM address set    
-    	WriteCOM(0x22);//RAM address set     
+    	WriteCMD(0x22);//RAM address set     
 	
 	for(i=0;i<38720;i++) { WriteDAT(0x00,0x00); }
 }
@@ -234,10 +234,10 @@ void LCD_INIT()
 
 void LCDTEST(void)
 {	  	
-	u16 p,q;
-	u8 w=22;
+	unsigned int p,q;
+	unsigned char w=22;
     	LCD_CMD(0x0021,0x0000);//RAM address set    
-    	WriteCOM(0x22);//RAM address set     
+    	WriteCMD(0x22);//RAM address set     
 
 	for(p=0;p<200;p++)
 	{

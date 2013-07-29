@@ -1,0 +1,349 @@
+C51 COMPILER V7.06   HD44780                                                               07/23/2013 22:05:50 PAGE 1   
+
+
+C51 COMPILER V7.06, COMPILATION OF MODULE HD44780
+OBJECT MODULE PLACED IN hd44780.OBJ
+COMPILER INVOKED BY: C:\software\keil\C51\BIN\C51.EXE hd44780.c COMPACT BROWSE DEBUG OBJECTEXTEND
+
+stmt level    source
+
+   1          
+   2          #include <reg52.h>
+   3          #include <intrins.h>
+   4          #include "macros.h"
+   5          #include "delay.h"
+   6          
+   7          /***********************************************************************
+   8          *MCU stc12c5a60s2
+   9          *晶振 32MHz
+  10          *LCD1602 4 位数据线程序
+  11          *   端口名称              端口符号    LCD引脚　  MCU端口   
+  12          *   RS数据/指令选择线        RS         4         P0^6     0命令1数据
+  13          *   R/W读写选择线            R/W        5         P0^5     0写1读
+  14          *   EN写使能线               EN         6         P0^4     使能位,下降沿触发
+  15          *   数据总线                 D0-D3     7-10       NC
+  16          *                            D4         11        P0^3
+  17          *                            D5         12        P0^2
+  18          *                            D6         13        P0^1
+  19          *                            D7         14        P0^0
+  20          *   其他端口连接：
+  21          *   电源负                   VSS        1      
+  22          *   电源正+4.5--+5.5V        VDD        2
+  23          *   对比度调节 (接地最大)    VL         3 
+  24          *   背光负                   BLK VSS    15    
+  25          *   背光正                   BLA VDD    16
+  26          ***********************************************************************/
+  27          
+  28          #define LCD_1602
+  29          //#define LCD_2004
+  30          
+  31          //#define LCD_8BIT      0x38    // LCD mode as 8-bit 2-line 5*8-dot 1/16Duty
+  32          #define LCD_4BIT        0x28    // LCD mode as 4-bit 2-line 5*8-dot 1/16Duty
+  33          
+  34          /* LCDPort contains 4-bit data D4 to D7 */
+  35          #define LCDPort P0
+  36          
+  37          /* Pins E,R/W and RS of LCD must be assigned to LCDControlPort*/
+  38          #define LCDControlPort P0
+  39          
+  40          /* LCD Enable pin is assigned to Px1 */
+  41          #define LCD_EN          4
+  42          /* LCD R/W pin is assigned to Px5 */
+  43          #define LCD_RW          5
+  44          /* LCD RS pin is assigned to Px2 */
+  45          #define LCD_RS          6
+  46          
+  47          /* Exported constants ------------------------------------------------*/
+  48          
+  49          #define LCD_CLS         0x01            // Clear LCD screen
+  50          #define LCD_HOME        0x02            // LCD Return home
+  51          #define LCD_ENTRY       0x06            // Set LCD Entry Mode
+  52          #define LCD_C2L         0x10            // Move Cursor to the left
+  53          #define LCD_C2R         0x14            // Move Cursor to the right
+  54          #define LCD_D2L         0x18            // Move display to the left
+  55          #define LCD_D2R         0x1C            // Move display to the right
+C51 COMPILER V7.06   HD44780                                                               07/23/2013 22:05:50 PAGE 2   
+
+  56          
+  57          #define LCD_ON          0x0C            // Turn on LCD and Cursor
+  58          #define LCD_OFF         0x08            // Turn off LCD
+  59          
+  60          #define LCD_CGRAM_ADDR  0x40            // Start address of LCD CGRAM
+  61          #define LCD_CGMAX       64              // Max CGRAM bytes
+  62          
+  63          #define LCD_COL         16
+  64          #define LCD_ROW         2
+  65          #define LCD_CHAR        LCD_COL*LCD_ROW
+  66          
+  67          #define LCD_L1          0x80
+  68          #define LCD_L2          0xC0
+  69          #define LCD_L3          0x90
+  70          #define LCD_L4          0xD0
+  71          
+  72          const unsigned char CGRAM[LCD_CGMAX] =
+  73          {
+  74                  // Make eight patterns of 8*5 font
+  75                  0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,        // 1.Dsiplay All
+  76                  0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,        // 2.White Board
+  77                  0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,        // 3.Virtical 1
+  78                  0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,        // 4.Virtical 2
+  79                  0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,        // 5.Horizon 1
+  80                  0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,        // 6.Horizon 2  
+  81                  0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,        // 7.Stars
+  82                  0xFF,0x11,0x11,0x11,0x11,0x11,0x11,0xFF,        // 8.Rectangle
+  83          };
+  84          
+  85          /* Exported macros ---------------------------------------------------*/
+  86          #define SET_RS          sbi(LCDControlPort, LCD_RS)
+  87          #define SET_RW          sbi(LCDControlPort, LCD_RW)
+  88          #define SET_EN          sbi(LCDControlPort, LCD_EN)
+  89          #define CLR_RS          cbi(LCDControlPort, LCD_RS)
+  90          #define CLR_RW          cbi(LCDControlPort, LCD_RW)
+  91          #define CLR_EN          cbi(LCDControlPort, LCD_EN)
+  92          
+  93          
+  94          /**
+  95            * @brief  Check busy
+  96            * @param  None
+  97            * @retval if busy return true
+  98            */
+  99          bit LCD_Check_Busy(void) 
+ 100          { 
+ 101   1      #ifdef LCD_8BIT
+                LCDPort = 0xFF; 
+              #elif defined(LCD_4BIT)
+ 104   1        LCDPort = 0xF0;
+ 105   1      #endif
+ 106   1        CLR_RS; 
+ 107   1        SET_RW; 
+ 108   1        CLR_EN; 
+ 109   1        _nop_(); 
+ 110   1        SET_EN;
+ 111   1        return (bit)(LCDPort & 0x80);
+ 112   1      }
+ 113          
+ 114          /**
+ 115            * @brief  Command data sent to LCD module
+ 116            * @param  command value to be sent
+ 117            * @retval None
+C51 COMPILER V7.06   HD44780                                                               07/23/2013 22:05:50 PAGE 3   
+
+ 118            */
+ 119          void LCD_CMD(unsigned char cmd_data)
+ 120          {  
+ 121   1        while(LCD_Check_Busy()); //忙则等待
+ 122   1        CLR_RS; 
+ 123   1        CLR_RW; 
+ 124   1      
+ 125   1      #ifdef LCD_4BIT
+ 126   1        SET_EN; 
+ 127   1        LCDPort = ( (LCDPort & 0x0F) | ((cmd_data << 4) & 0xF0) ); 
+ 128   1        _nop_(); 
+ 129   1        CLR_EN;
+ 130   1        _nop_();
+ 131   1        SET_EN;
+ 132   1        LCDPort = ( (LCDPort & 0x0F) | (cmd_data & 0xF0) );
+ 133   1        _nop_();
+ 134   1        CLR_EN;
+ 135   1      #elif  defined(LCD_8BIT)
+                SET_EN; 
+                LCDPort = cmd_data; 
+                _nop_(); 
+                CLR_EN;
+              #endif  
+ 141   1      }
+ 142          
+ 143          /**
+ 144            * @brief  Set Cursor on second row 1st digit
+ 145            * @param  None
+ 146            * @retval None
+ 147            */
+ 148          void LCD_2ndRow(void)
+ 149          { LCD_CMD(LCD_L2); }
+ 150          
+ 151          /**
+ 152            * @brief  Set Cursor to Home position
+ 153            * @param  None
+ 154            * @retval None
+ 155            */
+ 156          void LCD_Home(void)
+ 157          {
+ 158   1        LCD_CMD(LCD_HOME);
+ 159   1        DelayMs(2);
+ 160   1      }
+ 161          
+ 162          /**
+ 163            * @brief  Shift cursor to left
+ 164            * @param  None
+ 165            * @retval None
+ 166            */
+ 167          void LCD_LShift(void)
+ 168          { LCD_CMD(0x18); }
+ 169          
+ 170          /**
+ 171            * @brief  Shift cursor to right
+ 172            * @param  None
+ 173            * @retval None
+ 174            */
+ 175          void LCD_RShift(void)
+ 176          { LCD_CMD(0x1C); }
+ 177          
+ 178          /**
+ 179            * @brief  Set Display cursor
+C51 COMPILER V7.06   HD44780                                                               07/23/2013 22:05:50 PAGE 4   
+
+ 180            * @param  None
+ 181            * @retval None
+ 182            */
+ 183          void LCD_CursorOn(void)
+ 184          { LCD_CMD(0x0C); }
+ 185          
+ 186          /**
+ 187            * @brief  Set Hide cursor
+ 188            * @param  None
+ 189            * @retval None
+ 190            */
+ 191          void LCD_CursorOff(void)
+ 192          { LCD_CMD(0x08); }
+ 193          
+ 194          /**
+ 195            * @brief  Set Cursor to a specified location given by row and column information
+ 196            * @param  Row Number (1 to 2)
+ 197            * @param  Column Number (1 to 16) Assuming a 2 X 16 characters display
+ 198            * @retval None
+ 199            */
+ 200          void LCD_Locate(unsigned char row, unsigned char column)
+ 201          {
+ 202   1        column--;
+ 203   1        if (row == 1)
+ 204   1        {   /* Set cursor to 1st row address and add index*/
+ 205   2            LCD_CMD(column |= LCD_L1);
+ 206   2        } 
+ 207   1        else if (row == 2)
+ 208   1        {   /* Set cursor to 2nd row address and add index*/
+ 209   2            LCD_CMD(column |= LCD_L2);
+ 210   2        }
+ 211   1      #if defined(LCD_2004)
+                else if (row == 3)
+                {   LCD_CMD(column |= LCD_L3); }
+                else if (row == 4)
+                {   LCD_CMD(column |= LCD_L4); }
+              #endif
+ 217   1        
+ 218   1      }
+ 219          
+ 220          
+ 221          /**
+ 222            * @brief  Print Character on LCD module
+ 223            * @param  Ascii value of character
+ 224            * @retval None
+ 225            */
+ 226          void LCD_PrintChar(unsigned char ascode)
+ 227          { 
+ 228   1        while(LCD_Check_Busy()); //忙则等待
+ 229   1        SET_RS; 
+ 230   1        CLR_RW;       
+ 231   1      #ifdef LCD_4BIT
+ 232   1        SET_EN; 
+ 233   1        LCDPort = ( (LCDPort & 0x0F) | ((ascode << 4) & 0xF0) );  //Lower 4-bit
+ 234   1        _nop_();
+ 235   1        CLR_EN;
+ 236   1        _nop_();
+ 237   1       
+ 238   1        SET_EN; 
+ 239   1        LCDPort =  ( (LCDPort & 0x0F) | (ascode & 0xF0) );   //Higher 4-bit
+ 240   1        _nop_();
+ 241   1        CLR_EN;
+C51 COMPILER V7.06   HD44780                                                               07/23/2013 22:05:50 PAGE 5   
+
+ 242   1      #elif defined(LCD_8BIT)
+                SET_EN; 
+                LCDPort = ascode;   
+                _nop_();
+                CLR_EN;
+              #endif
+ 248   1      }
+ 249          
+ 250          /**
+ 251            * @brief  Display of a characters string
+ 252            * @param  Text to be displayed
+ 253            * @retval None
+ 254            */
+ 255          void LCD_PrintString(unsigned char *text)
+ 256          {
+ 257   1       do { LCD_PrintChar(*text++); } while (*text != '\n');
+ 258   1       //while(*text) {LCD_printchar(*text++);}
+ 259   1      }
+ 260          
+ 261          /**
+ 262            * @brief  Initializes Character Generator CGRAM with custom characters data
+ 263            * @param  Table containing characters definition values
+ 264            * @param  Number of characters defined in the table
+ 265            * @retval None
+ 266            */
+ 267          void LCD_Load_CGRAM(char tab[], unsigned char charnum)
+ 268          {
+ 269   1        unsigned char index;
+ 270   1        /* Each character contains 8 definition values*/
+ 271   1        charnum = charnum * 8;
+ 272   1        for (index = 0;index < charnum;index++)
+ 273   1        {
+ 274   2          /* Store values in LCD*/
+ 275   2          LCD_PrintChar(tab[index]);
+ 276   2          DelayMs(1);
+ 277   2        }
+ 278   1      }
+ 279          
+ 280          
+ 281          /**
+ 282            * @brief  Clear LCD module display
+ 283            * @param  None
+ 284            * @retval None
+ 285            */
+ 286          void LCD_Clear(void)
+ 287          {
+ 288   1        LCD_CMD(LCD_CLS);
+ 289   1        DelayMs(2);
+ 290   1      }
+ 291          
+ 292          /**
+ 293            * @brief  Initializes HD44780 LCD module in 4-bit mode
+ 294            * @param  None
+ 295            * @retval None
+ 296            */
+ 297          void LCD_INIT(void)
+ 298          {
+ 299   1        SET_EN;
+ 300   1        CLR_RS;
+ 301   1        //Initialization of HD44780-based LCD (4-bit HW)
+ 302   1        LCD_CMD(0x33);
+ 303   1        DelayMs(4);
+C51 COMPILER V7.06   HD44780                                                               07/23/2013 22:05:50 PAGE 6   
+
+ 304   1        LCD_CMD(0x32);
+ 305   1        DelayMs(4);
+ 306   1        //Function Set 4-bit mode
+ 307   1        LCD_CMD(0x28);
+ 308   1        //Cursor On/Off Control
+ 309   1        LCD_CMD(0x0C);
+ 310   1        //Entry mode set
+ 311   1        LCD_CMD(0x06);
+ 312   1        LCD_Clear();
+ 313   1        //Minimum delay to wait before driving LCD module
+ 314   1        DelayMs(200);
+ 315   1      }
+ 316          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    356    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =     64       8
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -35,7 +35,7 @@ Options 1,0,0  // Target 'myLCR'
  EnvLib ()
  EnvReg ()
  OrgReg ()
- TgStat=9
+ TgStat=11
  OutDir (.\)
  OutName (myLCR)
  GenApp=1

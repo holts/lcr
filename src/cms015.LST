@@ -1,0 +1,289 @@
+C51 COMPILER V7.06   CMS015                                                                07/25/2013 23:19:41 PAGE 1   
+
+
+C51 COMPILER V7.06, COMPILATION OF MODULE CMS015
+OBJECT MODULE PLACED IN cms015.OBJ
+COMPILER INVOKED BY: C:\software\keil\C51\BIN\C51.EXE cms015.c COMPACT BROWSE DEBUG OBJECTEXTEND
+
+stmt level    source
+
+   1          
+   2          /***********************************************************************
+   3          *MCU stc12c5a60s2
+   4          *晶振 32MHz
+   5          *cms015 8 位数据线程序
+   6          *   端口名称              端口符号    LCD引脚　  MCU端口   
+   7          *   片选选择线               CS                   P3^6
+   8          *   RS数据/指令选择线        RS                   P3^7     0命令1数据
+   9          *   WR写选择线               WR                   P4^6     0写1读
+  10          *   RST写使能线              RST                  P4^5     使能位,下降沿触发
+  11          *   RD读选择线               RD                   P4^4
+  12          *   数据总线                 D0-D7     7-10       P0^0-P0^7
+  13          *
+  14          *   其他端口连接：
+  15          *   BOOT0                                                  接地
+  16          *   电源负                   VSS        1      
+  17          *   电源正+4.5--+5.5V        VDD        2
+  18          *   对比度调节 (接地最大)    VL         3 
+  19          *   背光负                   BLK VSS    15    
+  20          *   背光正                   BLA VDD    16
+  21          ***********************************************************************/
+  22          
+  23          #include "config.h"
+  24          #include "macros.h"
+  25          #include "delay.h"
+  26          
+  27          //sfr  P4         =   0xc0;
+  28          
+  29          //定义端口
+  30          
+  31          /* LCD Read pin is assigned to Px4 of P4 */
+  32          /* LCD Write pin is assigned to Px5 of P4 */
+  33          /* LCD Reset pin is assigned to Px6 of P4 */
+  34          
+  35          /* LCD RS pin is assigned to Px7 of P3 */
+  36          /* LCD RS pin is assigned to Px6 of P3 */
+  37          sbit LCD_RD = P4^4;    
+  38          sbit LCD_WR = P4^5;
+  39          sbit LCD_RST = P4^6;
+  40          sbit LCD_RS = P3^7;
+  41          sbit LCD_CS = P3^6;
+  42          
+  43          /* LCDPort contains 8-bit data D0 to D7 */
+  44          #define LCDPORT         P0
+  45          
+  46          #define SET_RS          LCD_RS=1
+  47          #define SET_CS          LCD_CS=1
+  48          #define SET_RD          LCD_RD=1
+  49          #define SET_WR          LCD_WR=1
+  50          #define SET_RST         LCD_RST=1
+  51          
+  52          #define CLR_RS          LCD_RS=0
+  53          #define CLR_CS          LCD_CS=0
+  54          #define CLR_RD          LCD_RD=0
+  55          #define CLR_WR          LCD_WR=0
+C51 COMPILER V7.06   CMS015                                                                07/25/2013 23:19:41 PAGE 2   
+
+  56          #define CLR_RST         LCD_RST=0
+  57          
+  58          
+  59          void WriteCMD(unsigned char cmd_data)
+  60          {
+  61   1              unsigned int ud;
+  62   1              ud=cmd_data*256;
+  63   1              CLR_RS;
+  64   1              CLR_CS;
+  65   1              SET_RD;
+  66   1              CLR_WR;
+  67   1              cbi(LCDPORT, (0xff00));
+  68   1              SET_WR;
+  69   1      
+  70   1              CLR_WR;
+  71   1              sbi(LCDPORT, ud & 0xff00);
+  72   1              cbi(LCDPORT, (~ud & 0xff00));
+  73   1              SET_WR;
+  74   1              SET_RS;
+  75   1              SET_CS;
+  76   1      }
+  77          
+  78          void WriteDAT(unsigned char a,unsigned char b) //写16位数据
+  79          {
+  80   1              unsigned int ud;
+  81   1              ud=a*256;
+  82   1      
+  83   1              SET_RS; 
+  84   1              CLR_CS; 
+  85   1              SET_RD;
+  86   1      
+  87   1              CLR_WR;
+  88   1              sbi(LCDPORT, ud & 0xff00);
+  89   1              cbi(LCDPORT, (~ud & 0xff00));
+  90   1              SET_WR;
+  91   1      
+  92   1              ud=b*256;
+  93   1              CLR_WR;
+  94   1              sbi(LCDPORT, ud & 0xff00);
+  95   1              cbi(LCDPORT, (~ud & 0xff00));
+  96   1              SET_WR;
+  97   1      
+  98   1              CLR_RS;
+  99   1              SET_CS;
+ 100   1            
+ 101   1      }
+ 102          
+ 103          void WriteDAT8(unsigned char b)     //写8位数据
+ 104          {
+ 105   1              unsigned int ud;
+ 106   1              ud=b*256;
+ 107   1      
+ 108   1              SET_RS; 
+ 109   1              CLR_CS; 
+ 110   1              SET_RD;
+ 111   1         
+ 112   1              sbi(LCDPORT, ud & 0xff00);
+ 113   1              cbi(LCDPORT, (~ud & 0xff00));
+ 114   1              CLR_WR;
+ 115   1              SET_WR;
+ 116   1      
+ 117   1              CLR_RS;
+C51 COMPILER V7.06   CMS015                                                                07/25/2013 23:19:41 PAGE 3   
+
+ 118   1              SET_CS;
+ 119   1      }
+ 120          
+ 121          void LCD_CMD(unsigned int cmd,unsigned int dat)
+ 122          {       unsigned char i,j;
+ 123   1              i=cmd &0xff;
+ 124   1              WriteCMD(i);
+ 125   1              i=dat>>8;
+ 126   1              j=dat&0xff;
+ 127   1              WriteDAT(i ,j);
+ 128   1      }
+ 129          
+ 130          void LCD_SetXY(unsigned char x,unsigned char y)
+ 131          {       x=219-x;
+ 132   1              y=175-y;
+ 133   1              LCD_CMD(0x0021,y+x*256);
+ 134   1              WriteCMD(0x22);   
+ 135   1      }
+ 136          
+ 137          void LCD_INIT()
+ 138          {       unsigned int i;
+ 139   1              SET_CS;
+ 140   1              SET_RST;
+ 141   1              DelayMs(200);
+ 142   1              CLR_RST;
+ 143   1              DelayMs(200);
+ 144   1              SET_RST;
+ 145   1              DelayMs(200);
+ 146   1       
+ 147   1              LCD_CMD(0x0001,0x001B);   
+ 148   1              LCD_CMD(0x0002,0x0400);    
+ 149   1              LCD_CMD(0x0003,0x6000); //6020    
+ 150   1              LCD_CMD(0x0004,0x0000);   
+ 151   1              LCD_CMD(0x0005,0x0000);   
+ 152   1              LCD_CMD(0x0008,0x0202);   
+ 153   1              LCD_CMD(0x0009,0x0000);   
+ 154   1              LCD_CMD(0x000B,0x0000);   
+ 155   1              LCD_CMD(0x000C,0x0003);   
+ 156   1              LCD_CMD(0x0040,0x0000);   
+ 157   1              LCD_CMD(0x0041,0x00ef); //00ef    
+ 158   1              LCD_CMD(0x0042,0xDB00);   
+ 159   1              LCD_CMD(0x0043,0xDB00);   
+ 160   1              LCD_CMD(0x0021,0x0000);   
+ 161   1              LCD_CMD(0x0044,0xAF00);   
+ 162   1              LCD_CMD(0x0045,0xDB00);
+ 163   1              LCD_CMD(0x0001,0x001B);   
+ 164   1              LCD_CMD(0x0002,0x0400);    
+ 165   1              LCD_CMD(0x0003,0x1000); //6020    
+ 166   1              LCD_CMD(0x0004,0x0000);   
+ 167   1              LCD_CMD(0x0005,0x0000);   
+ 168   1              LCD_CMD(0x0007,0x0004);   
+ 169   1              LCD_CMD(0x0008,0x0202);   
+ 170   1              LCD_CMD(0x0009,0x0000);   
+ 171   1              LCD_CMD(0x000B,0x0000);   
+ 172   1              LCD_CMD(0x000C,0x0003);   
+ 173   1              LCD_CMD(0x0040,0x0000);   
+ 174   1              LCD_CMD(0x0041,0x00ef); //00ef    
+ 175   1              LCD_CMD(0x0042,0xDB00);   
+ 176   1              LCD_CMD(0x0043,0xDB00);   
+ 177   1              LCD_CMD(0x0021,0x0000);   
+ 178   1              LCD_CMD(0x0044,0xAF00);   
+ 179   1              LCD_CMD(0x0045,0xDB00);   
+C51 COMPILER V7.06   CMS015                                                                07/25/2013 23:19:41 PAGE 4   
+
+ 180   1              DelayMs(50); // Delay 50ms   
+ 181   1      
+ 182   1              LCD_CMD(0x0000,0x0001);   
+ 183   1              DelayMs(50); // Delay 50ms   
+ 184   1      
+ 185   1              LCD_CMD(0x0010,0x0000);   
+ 186   1              LCD_CMD(0x0011,0x0000);   
+ 187   1              LCD_CMD(0x0012,0x0000);    
+ 188   1              LCD_CMD(0x0013,0x0000);    
+ 189   1              LCD_CMD(0x0013,0x1517);   
+ 190   1              LCD_CMD(0x0012,0x0008);   
+ 191   1              LCD_CMD(0x0010,0x4040);   
+ 192   1              DelayMs(50); // Delay 50ms 
+ 193   1      
+ 194   1              LCD_CMD(0x0010,0x4140);   
+ 195   1              LCD_CMD(0x0012,0x0012);   
+ 196   1              DelayMs(50); // Delay 50ms   
+ 197   1      
+ 198   1              LCD_CMD(0x0010,0x4140);   
+ 199   1              DelayMs(50); // Delay 50ms   
+ 200   1      
+ 201   1              LCD_CMD(0x0013,0x3308);   
+ 202   1              DelayMs(50); // Delay 50ms          
+ 203   1      
+ 204   1              LCD_CMD(0x0030,0x0000);   
+ 205   1              LCD_CMD(0x0031,0x0207);   
+ 206   1              LCD_CMD(0x0032,0x0002);   
+ 207   1              LCD_CMD(0x0033,0x0104);   
+ 208   1              LCD_CMD(0x0034,0x0305);   
+ 209   1              LCD_CMD(0x0035,0x0002);   
+ 210   1              LCD_CMD(0x0036,0x0706);   
+ 211   1              LCD_CMD(0x0037,0x0503);   
+ 212   1              LCD_CMD(0x0038,0x0000);   
+ 213   1              LCD_CMD(0x0039,0x0000);   
+ 214   1              LCD_CMD(0x0007,0x0005);   
+ 215   1              DelayMs(50); // Delay 50ms  
+ 216   1      
+ 217   1              LCD_CMD(0x0007,0x0025);   
+ 218   1              LCD_CMD(0x0007,0x0027);   
+ 219   1              DelayMs(50); // Delay 50ms 
+ 220   1      
+ 221   1              LCD_CMD(0x0007,0x0037);    
+ 222   1              DelayMs(50); // Delay 50ms  
+ 223   1      
+ 224   1              LCD_CMD(0x0021,0x0000);//RAM address set    
+ 225   1              WriteCMD(0x22);//RAM address set     
+ 226   1              
+ 227   1              for(i=0;i<38720;i++) { WriteDAT(0x00,0x00); }
+ 228   1      }
+ 229          
+ 230          
+ 231          
+ 232          
+ 233          
+ 234          
+ 235          void LCDTEST(void)
+ 236          {               
+ 237   1              unsigned int p,q;
+ 238   1              unsigned char w=22;
+ 239   1              LCD_CMD(0x0021,0x0000);//RAM address set    
+ 240   1              WriteCMD(0x22);//RAM address set     
+ 241   1      
+C51 COMPILER V7.06   CMS015                                                                07/25/2013 23:19:41 PAGE 5   
+
+ 242   1              for(p=0;p<200;p++)
+ 243   1              {
+ 244   2                      for(q=0;q<w;q++) { WriteDAT(0xf8,0x00); }
+ 245   2                      for(q=0;q<w;q++) { WriteDAT(0x07,0xe0); }
+ 246   2                      for(q=0;q<w;q++) { WriteDAT(0x00,0x1f); }
+ 247   2                      for(q=0;q<w;q++) { WriteDAT(0xff,0xff); }
+ 248   2                      for(q=0;q<w;q++) { WriteDAT(0x00,0x00); }
+ 249   2                      for(q=0;q<w;q++) { WriteDAT(0x00,0x1f); }               
+ 250   2                      for(q=0;q<w;q++) { WriteDAT(0x07,0xe0); }
+ 251   2                      for(q=0;q<w;q++) { WriteDAT(0xf8,0x00); }
+ 252   2              }
+ 253   1      
+ 254   1      }
+ 255          
+ 256          
+ 257          
+ 258          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1094    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----       9
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

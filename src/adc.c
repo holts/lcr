@@ -1,13 +1,7 @@
 
-#include <reg52.h>
 #include <intrins.h>  
+#include "config.h"
 #include "delay.h"
-
-//AD转换
-sfr P1ASF = 0x9D;     //将P1置为模拟口寄存器(使能),各位中为1的有效
-sfr ADC_CONTR = 0xBC; //A/D转换控制寄存器
-sfr ADC_RES   = 0xBD; //A/D转换结果寄存器
-sfr ADC_RESL  = 0xBE; //A/D转换结果寄存器
 
 /***********************************************************************
 Function : ADC_Init 
