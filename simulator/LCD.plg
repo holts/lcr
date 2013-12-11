@@ -1,0 +1,41 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: LCD - Win32 Release--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating temporary file "C:\Users\holts\AppData\Local\Temp\RSP4EE5.tmp" with contents
+[
+/nologo /MD /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_AFXDLL" /D "_MBCS" /FR"Release/" /Fp"Release/LCD.pch" /Yu"stdafx.h" /Fo"Release/" /Fd"Release/" /FD /c 
+"C:\revel\STM8\Project\lcr\simulator\lcddr\test_lcd_main.cpp"
+]
+Creating command line "cl.exe @C:\Users\holts\AppData\Local\Temp\RSP4EE5.tmp" 
+Creating temporary file "C:\Users\holts\AppData\Local\Temp\RSP4EE6.tmp" with contents
+[
+/nologo /subsystem:windows /incremental:no /pdb:"Release/LCD.pdb" /machine:I386 /out:"Release/LCD.exe" 
+.\Release\LCD.obj
+.\Release\lcd_driver_ks0107.obj
+.\Release\lcd_graphics.obj
+.\Release\LCDDlg.obj
+.\Release\StdAfx.obj
+.\Release\test_lcd_main.obj
+.\Release\LCD.res
+]
+Creating command line "link.exe @C:\Users\holts\AppData\Local\Temp\RSP4EE6.tmp"
+<h3>Output Window</h3>
+Compiling...
+test_lcd_main.cpp
+Linking...
+Creating command line "bscmake.exe /nologo /o"Release/LCD.bsc"  .\Release\StdAfx.sbr .\Release\LCD.sbr .\Release\lcd_driver_ks0107.sbr .\Release\lcd_graphics.sbr .\Release\LCDDlg.sbr .\Release\test_lcd_main.sbr"
+Creating browse info file...
+<h3>Output Window</h3>
+
+
+
+<h3>Results</h3>
+LCD.exe - 0 error(s), 0 warning(s)
+</pre>
+</body>
+</html>
