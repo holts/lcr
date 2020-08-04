@@ -1,6 +1,6 @@
 /* Generic font for LCD */
 
-#ifdef __N1110_H__
+#ifdef __CMS015_H__
 /* { */
 
 #ifndef __LCD_FONT_H__

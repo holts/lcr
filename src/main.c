@@ -6,10 +6,13 @@
 #include "math.h"
 #include "misc.h"
 #include "uart.h"
-#include "n1110.h"
+//#include "n1110.h"
+#include "cms015.h"
 
 #include "main.h"
 #include "eeprom.h"
+
+#define M_PI 3.14159265358979323846
 
 const uint32_t chn[CH_NUM] ={1,2,7,17,8}; // + VBAT, TEMP, VREF
 const uint32_t cht[CH_NUM] ={
@@ -567,8 +570,8 @@ void powerOff(void)
 			|GPIO_CRH_CNF10|GPIO_CRH_MODE10 // usart rx
 	);
 
-	lcd_write(COMMAND, 0xA5); // DAL
-	lcd_write(COMMAND, 0xAE); // turn off display
+	WriteCMD( 0xA5); // DAL
+	WriteCMD( 0xAE); // turn off display
 
 
 	GPIOA->BSRR = GPIO_Pin_3; // ANALOG OFF
@@ -1331,17 +1334,17 @@ int active = 1 + (BAT_N_SEG* percent) / 100 ;
 for(int i =0;i<BAT_N_SEG;i++)
 {
 	if(i < active) {
-	lcd_write(DATA, 0x7F);
-	lcd_write(DATA, 0x7F);
-	lcd_write(DATA, 0x00);
+	WriteDAT( 0x7F);
+	WriteDAT( 0x7F);
+	WriteDAT( 0x00);
 	}else{
-	lcd_write(DATA, 0x41);
-	lcd_write(DATA, 0x41);
-	lcd_write(DATA, 0x41);
+	WriteDAT( 0x41);
+	WriteDAT( 0x41);
+	WriteDAT( 0x41);
 	}
 }
-lcd_write(DATA, 0x7F); // tail
-lcd_write(DATA, 0x1C);
+WriteDAT( 0x7F); // tail
+WriteDAT( 0x1C);
 
 }
 //----------------------------------------------------------------------------
